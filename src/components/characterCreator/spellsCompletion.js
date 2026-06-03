@@ -123,8 +123,15 @@ export function getSpellsCompletion(characterData = {}) {
     0,
   );
 
+  // Use `>=` rather than strict `===`: the picker caps additions at the
+  // cap, so for a UI-built character this is identical to equality
+  // (you must FILL your slots — under-cap still blocks). But it also
+  // means an OVER-cap stored state (e.g. spells left over after the
+  // level was lowered) can never lock the step with no way out. The
+  // level-decrease handler trims the leftovers so the saved character
+  // stays legal (see levelTrim).
   const isComplete =
-    selCantrips === cantripCap && selNonCantrips === nonCantripCap;
+    selCantrips >= cantripCap && selNonCantrips >= nonCantripCap;
 
   return {
     isComplete,
