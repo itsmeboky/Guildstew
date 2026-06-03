@@ -338,15 +338,23 @@ export default function CharacterCreator() {
         race: characterData.race,
         subrace: characterData.subrace,
         background: characterData.background,
-        level: characterData.level
+        level: characterData.level,
+        // Imagery is chosen on the Identity step (before class) — preserve
+        // portrait + token (and their framing) across a class change so a
+        // re-pick doesn't blank the character's picture.
+        avatar_url: characterData.avatar_url || "",
+        profile_avatar_url: characterData.profile_avatar_url || "",
+        avatar_position: characterData.avatar_position || { x: 0, y: 0 },
+        avatar_zoom: characterData.avatar_zoom || 1,
+        profile_position: characterData.profile_position || { x: 0, y: 0 },
+        profile_zoom: characterData.profile_zoom || 1,
       };
-      
+
       setCharacterData({
         ...step1Data,
         class: characterData.class,
         subclass: "",
         alignment: "True Neutral",
-        avatar_url: "",
         attributes: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
         skills: {},
         spells: { cantrips: [], level1: [] },

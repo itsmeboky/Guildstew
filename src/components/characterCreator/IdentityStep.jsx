@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Upload, User, Move, ZoomIn, ZoomOut, Save, Pencil } from "lucide-react";
-import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/AuthContext";
+import { uploadFile } from "@/utils/uploadFile";
+import { BUCKETS } from "@/config/storageConfig";
 import { Slider } from "@/components/ui/slider";
 import { RACES, BACKGROUNDS as SRD_BACKGROUNDS } from "@/components/dnd5e/dnd5eRules";
 import { getModdedRaces } from "@/lib/modEngine";
@@ -249,6 +251,7 @@ function fixedLanguagesFor(raceName, subraceName) {
 }
 
 export default function IdentityStep({ characterData, updateCharacterData, campaignId }) {
+  const { user } = useAuth();
   const { data: moddedRaces = [] } = useQuery({
     queryKey: ["characterCreator", "moddedRaces", campaignId],
     queryFn: () => getModdedRaces(campaignId),
@@ -281,12 +284,26 @@ export default function IdentityStep({ characterData, updateCharacterData, campa
   const [fullBodySaved, setFullBodySaved] = useState(!!characterData.avatar_position);
   const [profileSaved, setProfileSaved] = useState(!!characterData.profile_position);
 
+  // Character imagery goes to user-assets/users/{user_id}/character-library/
+  // — the per-user convention shared with the Quick/AI flows. The old
+  // base44.integrations.Core.UploadFile default targeted campaign-assets,
+  // producing URLs that weren't valid for a player's own library.
+  const characterLibraryPath = () =>
+    user?.id ? `users/${user.id}/character-library` : "character-library";
+
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!user?.id) {
+      toast.error("Sign in to upload imagery.");
+      return;
+    }
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await uploadFile(file, BUCKETS.USER, characterLibraryPath(), {
+        userId: user.id,
+        uploadType: "avatar",
+      });
       updateCharacterData({ avatar_url: file_url });
       setFullBodyPosition({ x: 0, y: 0 });
       setFullBodyZoom(1);
@@ -301,9 +318,16 @@ export default function IdentityStep({ characterData, updateCharacterData, campa
   const handleProfileImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!user?.id) {
+      toast.error("Sign in to upload imagery.");
+      return;
+    }
     setUploadingProfile(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await uploadFile(file, BUCKETS.USER, characterLibraryPath(), {
+        userId: user.id,
+        uploadType: "avatar",
+      });
       updateCharacterData({ profile_avatar_url: file_url });
       setProfilePosition({ x: 0, y: 0 });
       setProfileZoom(1);
