@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { User } from "lucide-react";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import { spellDetails } from "@/components/dnd5e/spellData";
@@ -8,6 +8,7 @@ import {
   CLASS_SAVING_THROWS,
 } from '@/components/dnd5e/dnd5eRules';
 import { calculateMaxHP } from "@/components/dnd5e/characterCalculations";
+import { deriveArmorClass } from "@/components/dnd5e/deriveCharacterStats";
 import { safeText } from "@/utils/safeRender";
 import CompanionCard from "@/components/characters/CompanionCard";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
@@ -119,15 +120,15 @@ export default function ReviewStep({ characterData }) {
   const [hoveredItem, setHoveredItem] = useState(null);
 
   const profBonus = proficiencyBonus(characterData.level);
-  const conMod = abilityModifier(characterData.attributes?.con || 10);
-  const dexMod = abilityModifier(characterData.attributes?.dex || 10);
   const maxHP = calculateMaxHP({
     class: characterData.class,
     level: characterData.level,
     conScore: characterData.attributes?.con,
     multiclasses: characterData.multiclasses,
   });
-  const ac = 10 + dexMod;
+  // Same derivation the save builder uses, so Review and the saved
+  // payload always agree on AC.
+  const ac = deriveArmorClass(characterData);
 
   const primaryClassLevel =
     (characterData.level || 1) -
