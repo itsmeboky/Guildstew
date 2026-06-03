@@ -1,6 +1,5 @@
 import {
   calculateMaxHP,
-  calculateAC,
   calculateProficiencyBonus,
   getSpeed,
   calculateAbilityModifier,
@@ -9,6 +8,11 @@ import {
   getBreweryClassFeaturesAtLevel,
   getBreweryClassResource,
 } from "@/lib/breweryClassApply";
+import {
+  deriveArmorClass,
+  deriveSavingThrows,
+  deriveProficiencies,
+} from "@/components/dnd5e/deriveCharacterStats";
 
 /**
  * Build a fully-derived "stats" object from CharacterCreator's characterData.
@@ -32,7 +36,10 @@ export function buildStatsFromCharacterData(characterData) {
     conScore: attributes.con,
     multiclasses: characterData.multiclasses,
   });
-  const armor_class = calculateAC(attributes.dex);
+  // AC / saving throws / proficiencies are DERIVED here (and re-derived
+  // identically by ReviewStep) from class / race / background / attributes
+  // / inventory — never stored step-by-step, so they can't go stale.
+  const armor_class = deriveArmorClass(characterData);
   const initiative = calculateAbilityModifier(attributes.dex);
   // Brewery races override SRD-lookup basics — speed, size, and
   // darkvision come from the mod schema when _brewery_race is set
@@ -126,13 +133,11 @@ export function buildStatsFromCharacterData(characterData) {
 
     // rules/mechanics
     skills: characterData.skills || {},
-    saving_throws: characterData.saving_throws || {},
+    // Derived from the class's two proficient saves (e.g. Fighter STR/CON).
+    saving_throws: deriveSavingThrows(characterData.class),
     languages: characterData.languages || [],
-    proficiencies: characterData.proficiencies || {
-      armor: [],
-      weapons: [],
-      tools: [],
-    },
+    // Derived + aggregated from class / race / background grants, deduped.
+    proficiencies: deriveProficiencies(characterData),
     features: [
       ...((characterData.features) || []),
       ...((characterData.race_features) || []),
