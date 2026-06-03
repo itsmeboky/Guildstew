@@ -116,15 +116,36 @@ function scanInventoryArmor(inventory) {
   const inv = Array.isArray(inventory) ? inventory : [];
   let bodyArmor = null;
   let hasShield = false;
-  for (const item of inv) {
-    const key = matchArmorKey(item?.name);
-    if (!key) continue;
+
+  const considerArmor = (key) => {
     const entry = ARMOR_TABLE[key];
+    if (!entry) return;
     if (entry.type === "shield") {
       hasShield = true;
     } else if (!bodyArmor || entry.ac > bodyArmor.ac) {
       bodyArmor = { name: key, ...entry };
     }
+  };
+
+  for (const item of inv) {
+    const type = String(item?.type || "").toLowerCase();
+    // Prefer the structured type written by EquipmentStep (post equipment
+    // fix): shields and armor are tagged, so AC no longer has to guess
+    // from raw names. The ARMOR_TABLE entry (matched by name) still
+    // supplies the AC numbers / dex rules.
+    if (type === "shield") {
+      hasShield = true;
+      continue;
+    }
+    if (type === "armor") {
+      const key = matchArmorKey(item?.name);
+      if (key) considerArmor(key);
+      continue;
+    }
+    // Fallback for untyped items (manual rows, legacy characters, bazaar
+    // gear): identify armor/shield by matching the name to ARMOR_TABLE.
+    const key = matchArmorKey(item?.name);
+    if (key) considerArmor(key);
   }
   return { bodyArmor, hasShield };
 }
