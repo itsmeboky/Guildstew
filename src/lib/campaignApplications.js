@@ -239,7 +239,77 @@ export async function acceptApplication({ application }) {
       .update({ campaign_id: application.campaign_id })
       .eq("id", application.character_id)
       .catch(() => { /* non-fatal */ });
+
+    // Materialize the joining character's creator-side bonds into the
+    // campaign as PENDING items for the GM to accept/reject in the lobby.
+    // Deity-first; relationships plug into the same path once the Allies &
+    // Enemies tab + relationship_entities table exist (see the seam below).
+    // Non-fatal: a failure here must never block the accept itself.
+    await materializeJoinBonds({
+      characterId: application.character_id,
+      campaignId: application.campaign_id,
+      submittedBy: playerId,
+    }).catch((err) => {
+      if (typeof console !== "undefined") console.warn("materializeJoinBonds failed (non-fatal):", err);
+    });
   }
+}
+
+/**
+ * On accept, read the joining character's `creator_data` and seed the
+ * campaign with PENDING copies of its creator-authored bonds, for the GM
+ * to accept/reject in the lobby (DeityApprovalDialog). The GM's auth
+ * context runs this, so the `deities` GM-write RLS policy permits the
+ * insert. Idempotent — re-accepting won't duplicate.
+ */
+export async function materializeJoinBonds({ characterId, campaignId, submittedBy }) {
+  if (!characterId || !campaignId) return;
+  const { data: char, error } = await supabase
+    .from("characters")
+    .select("creator_data")
+    .eq("id", characterId)
+    .maybeSingle();
+  if (error) throw error;
+  const creator = char?.creator_data || {};
+
+  // ── Deity (Cleric/Paladin "create-your-own") ──────────────────────────
+  // Shape: creator_data.allies.deity = { name, desc, image, presetId }.
+  const deity = creator?.allies?.deity;
+  if (deity && String(deity.name || "").trim()) {
+    await materializePlayerDeity({ campaignId, submittedBy, deity });
+  }
+
+  // ── SEAM (Phase 3b): creator_data.relationships → relationship_entities ──
+  // The free-create relationships ([{name,bio,image,type,affinity,trust}])
+  // materialize the SAME way (pending, source 'player-submitted') once the
+  // Allies & Enemies tab + relationship_entities table land. Intentionally
+  // not built here — there's no entity table to write to yet.
+}
+
+async function materializePlayerDeity({ campaignId, submittedBy, deity }) {
+  const name = String(deity.name).trim();
+  // Idempotency: skip if this player already submitted a deity by this name
+  // to this campaign (the deities table has no unique constraint for it).
+  const { data: existing } = await supabase
+    .from("deities")
+    .select("id")
+    .eq("campaign_id", campaignId)
+    .eq("submitted_by", submittedBy)
+    .eq("name", name)
+    .maybeSingle();
+  if (existing?.id) return;
+
+  await supabase.from("deities").insert({
+    campaign_id: campaignId,
+    name,
+    description: deity.desc || null,
+    image_url: deity.image || null,
+    source: "player-submitted",
+    approval_status: "pending",
+    submitted_by: submittedBy || null,
+    created_by: submittedBy || null,
+    discovered: true,
+  });
 }
 
 export async function rejectCharacter({ application, gmMessage }) {
