@@ -1135,9 +1135,15 @@ function BondsReviewCard({ characterData }) {
   const bondLines = [];
   for (const s of sections) {
     if (s.type === "patron") {
-      if (characterData.subclass) {
-        bondLines.push({ key: s.key, label: "Patron", name: characterData.subclass });
-      }
+      // A Warlock's patron (subclass) is mandatory — always show it. Same
+      // resolution as the bonds step's PatronReadout: subclass, else the
+      // sole SRD patron, else the patron type. No "unchosen" state.
+      const sole = cls?.subclasses?.length === 1 ? cls.subclasses[0]?.name : null;
+      bondLines.push({
+        key: s.key,
+        label: "Patron",
+        name: characterData.subclass || sole || "Otherworldly Patron",
+      });
     } else if (s.type === "flavor") {
       const a = allies[s.key] || {};
       if (a.name || a.desc || a.image) {
