@@ -166,6 +166,10 @@ export function buildStatsFromCharacterData(characterData) {
     //   - allies: Brief B's deity / familiar / mount / circle flavor
     //     (allies[bondKey] = {name,desc,image,presetId}) — previously
     //     dropped on save; now persisted here.
+    //   - relationships: the Bonds & Allies step's universal free-create
+    //     list (allies/rivals/enemies the player adds for any class) —
+    //     [{id,name,bio,image,type,affinity}]. The affinity bar is intent
+    //     only; it isn't wired to live party-panel edges yet.
     // Cross-system `companions` stays a top-level column (below).
     creator_data: {
       baseAttributes: characterData.baseAttributes || characterData.attributes || {},
@@ -174,6 +178,7 @@ export function buildStatsFromCharacterData(characterData) {
       equipment_choices: characterData.equipment_choices || {},
       used_starting_gold: !!characterData.used_starting_gold,
       allies: characterData.allies || {},
+      relationships: Array.isArray(characterData.relationships) ? characterData.relationships : [],
     },
     spells: characterData.spells || { cantrips: [], level1: [] },
     equipment: characterData.equipment || { weapons: [], armor: {} },

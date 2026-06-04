@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { ABILITY_NAMES } from "@/components/dnd5e/dnd5eRules";
@@ -7,8 +7,6 @@ import {
   applyBreweryClassBaseline,
   clearBreweryClassMarkers,
 } from "@/lib/breweryClassApply";
-import CompanionPicker from "@/components/characterCreator/CompanionPicker";
-import { bondsForClass } from "@/components/characterCreator/bondsSections";
 import { LevelPicker } from "@/components/characterCreator/LevelPicker";
 import { trimChoicesToLevel } from "@/components/characterCreator/levelTrim";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
@@ -35,7 +33,9 @@ const CLASS_FAMILY = {
 
 // Per-class tinted accent — used in the featured tome hero, playstyle
 // callout border, subclass card highlights, and build summary heading.
-const CLASS_ACCENT = {
+// Exported so the Bonds & Allies step (which renders the gated bond
+// cards relocated off this step) tints them with the same palette.
+export const CLASS_ACCENT = {
   Barbarian: "#D89860", Bard: "#FF4DA6",
   Cleric: "#FFF1D2",    Druid: "#52D880",
   Fighter: "#FF5040",   Monk: "#3FE0E8",
@@ -47,7 +47,10 @@ const CLASS_ACCENT = {
 // Class lore + structural fields — merged from the existing creator's
 // descriptions + the prototype data.jsx subclass / companion content.
 // Icons are the existing app's URL artwork.
-const CLASSES_DATA = [
+// Exported so the Bonds & Allies step can resolve the picked class's
+// data object (for bondsForClass + the Warlock patron readout) without
+// duplicating the roster.
+export const CLASSES_DATA = [
   {
     name: "Barbarian",
     blurb: "Barbarians are fierce warriors who draw on primal rage. Highest hit points of any class — they charge in and out-soldier everyone.",
@@ -376,18 +379,10 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
             <EmptyClassPrompt />
           )}
 
-          {/* Bonds & Allies — conditional: renders only the sections that
-              apply (deity, patron, familiar picker, mount flag, …) and the
-              embedded CompanionPicker. Hidden entirely when none apply. */}
-          {selectedClass && (
-            <BondsTome
-              cls={selectedClass}
-              accent={accent}
-              data={characterData}
-              update={updateCharacterData}
-              campaignId={campaignId}
-            />
-          )}
+          {/* Bonds & Allies relocated to its own step (after Skills,
+              before Equipment) — see BondsAndAlliesStep. The gated bond
+              cards, patron readout, and familiar picker now live there
+              alongside the universal free-create relationships section. */}
 
           {selectedClass?._source === "brewery" && (
             <BreweryClassPickers
@@ -631,308 +626,6 @@ function SubclassChapter({ cls, accent, subclass, level, onPick }) {
         })}
       </div>
       )}
-    </div>
-  );
-}
-
-// ============================================================================
-// BONDS TOME — patrons / deities / companions / mounts / circles / origins
-// ============================================================================
-
-function BondsTome({ cls, accent, data, update, campaignId }) {
-  const sections = bondsForClass(cls, data);
-  // No applicable section → the whole Bonds & Allies tome is hidden
-  // (e.g. Fighter, Barbarian, Monk, Rogue, base Ranger, Bard, Sorcerer).
-  if (sections.length === 0) return null;
-
-  return (
-    <div className="tome" style={{ padding: '32px 36px' }}>
-      <OrnateHeading color={accent}>Bonds &amp; Allies</OrnateHeading>
-      <div
-        className="italic-serif"
-        style={{
-          textAlign: 'center',
-          color: 'var(--text-dim)',
-          fontSize: 15,
-          maxWidth: 600,
-          margin: '0 auto 22px',
-        }}
-      >
-        Your hero doesn't walk alone. Detail the beings — divine, infernal, animal — that shape their power.
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-        {sections.map((section) => {
-          if (section.type === "flavor") {
-            return (
-              <AllyCard
-                key={section.key}
-                bond={section}
-                accent={accent}
-                data={data}
-                update={update}
-              />
-            );
-          }
-          if (section.type === "patron") {
-            return <PatronReadout key={section.key} accent={accent} subclass={data.subclass} cls={cls} />;
-          }
-          if (section.type === "mount-flag") {
-            return <MountFlag key={section.key} accent={accent} />;
-          }
-          if (section.type === "companion-picker") {
-            return (
-              <CompanionPicker
-                key={section.key}
-                characterData={data}
-                updateCharacterData={update}
-                campaignId={campaignId}
-              />
-            );
-          }
-          return null;
-        })}
-      </div>
-    </div>
-  );
-}
-
-// Read-only patron surface — the patron IS the Warlock subclass, chosen
-// on the Class step's subclass picker; this just reflects it (no re-pick).
-function PatronReadout({ accent, subclass, cls }) {
-  const detail = (cls.subclasses || []).find((s) => s.name === subclass) || null;
-  return (
-    <div
-      style={{
-        padding: 20,
-        background: `linear-gradient(135deg, ${accent}0E, transparent 70%)`,
-        border: `1px solid ${accent}33`,
-        borderLeft: `3px solid ${accent}`,
-        borderRadius: 6,
-      }}
-    >
-      <div className="label" style={{ color: accent, marginBottom: 4 }}>The being you serve</div>
-      <div className="display" style={{ fontSize: 22, color: 'var(--text)' }}>
-        {subclass || 'Choose your patron on the path picker above'}
-      </div>
-      {detail?.desc && (
-        <div className="italic-serif" style={{ fontSize: 14, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.5 }}>
-          {detail.desc}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Informational mount note — Find Steed summons a celestial mount in
-// play; it isn't a creation-time picker.
-function MountFlag({ accent }) {
-  return (
-    <div
-      style={{
-        padding: 20,
-        background: `linear-gradient(135deg, ${accent}0E, transparent 70%)`,
-        border: `1px solid ${accent}33`,
-        borderLeft: `3px solid ${accent}`,
-        borderRadius: 6,
-      }}
-    >
-      <div className="label" style={{ color: accent, marginBottom: 4 }}>Celestial Mount</div>
-      <div className="italic-serif" style={{ fontSize: 14.5, color: 'var(--text-dim)', lineHeight: 1.55 }}>
-        Your <strong style={{ color: 'var(--text)' }}>Find Steed</strong> spell lets you summon a celestial
-        mount when you cast it in play — no need to pick one now.
-      </div>
-    </div>
-  );
-}
-
-function AllyCard({ bond, accent, data, update }) {
-  const allies = data.allies || {};
-  const ally = allies[bond.key] || {};
-  const setAlly = (patch) => {
-    update({ allies: { ...allies, [bond.key]: { ...ally, ...patch } } });
-  };
-
-  const effectiveName = ally.name ?? bond.preset?.name ?? '';
-  const effectiveDesc = ally.desc ?? bond.preset?.desc ?? '';
-
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '160px 1fr',
-        gap: 20,
-        padding: 20,
-        background: `linear-gradient(135deg, ${accent}0E, transparent 70%)`,
-        border: `1px solid ${accent}33`,
-        borderLeft: `3px solid ${accent}`,
-        borderRadius: 6,
-      }}
-    >
-      <AllyPortrait
-        src={ally.image}
-        onChange={(img) => setAlly({ image: img })}
-      />
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div>
-          <div className="label" style={{ color: accent, marginBottom: 4 }}>{bond.kicker}</div>
-          <div className="display" style={{ fontSize: 22, color: 'var(--text)' }}>{bond.label}</div>
-        </div>
-
-        {bond.presetOptions && bond.presetOptions.length > 0 && (
-          <PresetPicker
-            options={bond.presetOptions}
-            current={ally.presetId}
-            color={accent}
-            onPick={(opt) => setAlly({
-              presetId: opt.id,
-              name: ally.name?.trim() ? ally.name : opt.name,
-              desc: ally.desc?.trim() ? ally.desc : opt.desc,
-            })}
-          />
-        )}
-
-        <div>
-          <div className="label" style={{ marginBottom: 4, color: 'var(--text-dim)' }}>Name</div>
-          <input
-            className="input"
-            value={effectiveName}
-            onChange={(e) => setAlly({ name: e.target.value })}
-            placeholder={bond.placeholder}
-            style={{ fontFamily: 'var(--display)', fontSize: 18 }}
-          />
-        </div>
-
-        <div>
-          <div className="label" style={{ marginBottom: 4, color: 'var(--text-dim)' }}>Description</div>
-          <textarea
-            className="input italic-serif"
-            value={effectiveDesc}
-            onChange={(e) => setAlly({ desc: e.target.value })}
-            placeholder={bond.descPlaceholder}
-            rows={3}
-            style={{
-              resize: 'vertical',
-              minHeight: 70,
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 14,
-              lineHeight: 1.5,
-            }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AllyPortrait({ src, onChange }) {
-  const inputRef = useRef(null);
-  const [drag, setDrag] = useState(false);
-  const handleFile = (file) => {
-    if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = (e) => onChange(e.target.result);
-    reader.readAsDataURL(file);
-  };
-  return (
-    <div
-      onClick={() => inputRef.current?.click()}
-      onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={(e) => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer.files?.[0]); }}
-      style={{
-        width: '100%',
-        height: 160,
-        borderRadius: 8,
-        background: src ? `url(${src}) center/cover` : 'rgba(11,19,28,0.6)',
-        border: `2px ${drag ? 'solid' : 'dashed'} ${drag || src ? 'var(--orange)' : 'var(--border-strong)'}`,
-        cursor: 'pointer',
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        transition: 'border-color .15s, background .15s',
-        overflow: 'hidden',
-      }}
-    >
-      {!src && (
-        <div style={{ textAlign: 'center', color: 'var(--text-faint)', pointerEvents: 'none', padding: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 6, opacity: 0.5 }}>⊕</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)' }}>Drop their likeness</div>
-        </div>
-      )}
-      {src && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onChange(''); }}
-          style={{
-            position: 'absolute',
-            top: 6,
-            right: 6,
-            background: 'rgba(0,0,0,0.72)',
-            color: 'white',
-            border: 'none',
-            borderRadius: 6,
-            padding: '3px 7px',
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          Replace
-        </button>
-      )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => handleFile(e.target.files?.[0])}
-      />
-    </div>
-  );
-}
-
-function PresetPicker({ options, current, color, onPick }) {
-  return (
-    <div>
-      <div className="label" style={{ marginBottom: 6, color: 'var(--text-dim)' }}>
-        Pick a preset (you can edit)
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {options.map((opt) => {
-          const active = current === opt.id;
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => onPick(opt)}
-              style={{
-                all: 'unset',
-                cursor: 'pointer',
-                padding: '6px 12px',
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: 700,
-                background: active ? color : 'transparent',
-                color: active ? 'white' : 'var(--text-dim)',
-                border: `1px solid ${active ? color : 'var(--border)'}`,
-                transition: 'all .15s',
-              }}
-              onMouseEnter={(e) => {
-                if (!active) e.currentTarget.style.borderColor = color;
-              }}
-              onMouseLeave={(e) => {
-                if (!active) e.currentTarget.style.borderColor = 'var(--border)';
-              }}
-            >
-              {opt.name}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
