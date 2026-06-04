@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Check, Star, Lock, Plus } from "lucide-react";
-import { getBackgroundSkills } from "@/components/dnd5e/backgroundData";
+import { getBackgroundSkills, getBackgroundLanguages } from "@/components/dnd5e/backgroundData";
 import { getRaceSkillProficiencies } from "@/components/dnd5e/raceData";
 import {
   abilityModifier,
@@ -8,6 +8,8 @@ import {
   SKILL_ABILITIES,
   CLASS_SKILL_CHOICES,
   getMulticlassSkillGrant,
+  getRaceLanguages,
+  ALL_LANGUAGES,
 } from "@/components/dnd5e/dnd5eRules";
 import { expertiseRequiredFor } from "@/components/characterCreator/skillsCompletion";
 import InfoTip from "@/components/characterCreator/InfoTip";
@@ -226,7 +228,7 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
   if (!characterData.class) {
     return (
       <div>
-        <StepHeader kicker="Chapter V · The Talents" title="Pick your skills" />
+        <StepHeader kicker="Chapter V · The Talents" title="Skills & Languages" />
         <div className="tome" style={{ padding: 40, textAlign: 'center', marginTop: 24 }}>
           <div className="italic-serif" style={{ fontSize: 16, color: 'var(--text-dim)' }}>
             Pick a class on Chapter II — your skill list comes from there.
@@ -240,8 +242,8 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     <div>
       <StepHeader
         kicker="Chapter V · The Talents"
-        title="Pick your skills"
-        subtitle="Proficiency means you add your proficiency bonus to rolls with that skill."
+        title="Skills & Languages"
+        subtitle="Proficiency means you add your proficiency bonus to rolls with that skill. Below, set the languages your hero speaks."
       />
 
       <Primer title="Two sources of skill proficiency">
@@ -442,6 +444,163 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
               setSelectedSkills={setSelectedSkills}
             />
           ))}
+        </div>
+      )}
+
+      <LanguagesSection
+        characterData={characterData}
+        updateCharacterData={updateCharacterData}
+      />
+    </div>
+  );
+}
+
+// ============================================================================
+// LanguagesSection — automatic (granted) languages + choice-slot pickers.
+// Granted = Common + the race's fixed language(s) (RACES registry, source of
+// truth). Choice slots stack across race / subrace (Human, High Elf, Half-Elf)
+// and background (Acolyte +2). Picker offers the SRD list minus what's known.
+// Persists the FULL set into characterData.languages (an existing stats field
+// / column) — granted is re-derived from race on reload, so picks are simply
+// the saved entries that aren't granted.
+// ============================================================================
+function LanguagesSection({ characterData, updateCharacterData }) {
+  const { fixed: granted, choices: raceChoices } = getRaceLanguages(
+    characterData.race,
+    characterData.subrace,
+  );
+  const bgChoices = getBackgroundLanguages(characterData.background) || 0;
+  const totalSlots = raceChoices + bgChoices;
+
+  const saved = Array.isArray(characterData.languages) ? characterData.languages : [];
+  // Picks = saved languages that aren't auto-granted and are real SRD langs.
+  const picks = saved.filter((l) => !granted.includes(l) && ALL_LANGUAGES.includes(l));
+
+  // Keep characterData.languages in sync as race / subrace / background change:
+  // ensure every granted language is present, drop stale grants from a prior
+  // race, and trim picks beyond the current slot count.
+  useEffect(() => {
+    const trimmedPicks = picks.slice(0, totalSlots);
+    const next = [...granted, ...trimmedPicks];
+    const changed =
+      next.length !== saved.length || next.some((l, i) => l !== saved[i]);
+    if (changed) updateCharacterData({ languages: next });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [characterData.race, characterData.subrace, characterData.background]);
+
+  const togglePick = (lang) => {
+    const current = saved.filter((l) => !granted.includes(l) && ALL_LANGUAGES.includes(l));
+    let nextPicks;
+    if (current.includes(lang)) {
+      nextPicks = current.filter((l) => l !== lang);
+    } else {
+      if (current.length >= totalSlots) return; // all slots full
+      nextPicks = [...current, lang];
+    }
+    updateCharacterData({ languages: [...granted, ...nextPicks] });
+  };
+
+  const pool = ALL_LANGUAGES.filter((l) => !granted.includes(l));
+  const picksLeft = Math.max(0, totalSlots - picks.length);
+
+  return (
+    <div className="panel" style={{ padding: 20, marginTop: 18 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          marginBottom: 14,
+          flexWrap: 'wrap',
+          gap: 10,
+        }}
+      >
+        <h3 className="display" style={{ fontSize: 22, color: 'var(--text)', margin: 0 }}>
+          Languages
+        </h3>
+        {totalSlots > 0 && (
+          <div
+            className="chip"
+            style={{
+              fontSize: 12,
+              padding: '3px 10px',
+              color: picksLeft === 0 ? 'var(--teal)' : 'var(--orange-soft)',
+              borderColor: picksLeft === 0 ? 'var(--teal)' : 'var(--orange-soft)',
+            }}
+          >
+            {picks.length} / {totalSlots} chosen
+          </div>
+        )}
+      </div>
+
+      {/* Granted (automatic) languages — locked/known. */}
+      <div className="label" style={{ color: 'var(--gold)', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <Lock className="w-3 h-3" /> Known from race &amp; heritage
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: totalSlots > 0 ? 18 : 0 }}>
+        {granted.map((l) => (
+          <span key={l} className="chip chip-gold" style={{ fontSize: 12 }}>{l}</span>
+        ))}
+      </div>
+
+      {totalSlots > 0 ? (
+        <>
+          <div className="label" style={{ marginBottom: 8, color: 'var(--text-dim)' }}>
+            Choose {totalSlots} more {totalSlots === 1 ? 'language' : 'languages'}
+            {bgChoices > 0 && (
+              <span style={{ color: 'var(--text-faint)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
+                {' '}— {raceChoices > 0 ? `${raceChoices} from heritage, ` : ''}{bgChoices} from your background
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+            {pool.map((lang) => {
+              const picked = picks.includes(lang);
+              const full = !picked && picksLeft === 0;
+              return (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => togglePick(lang)}
+                  disabled={full}
+                  className={`pickable ${picked ? 'selected' : ''}`}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: 'inherit',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    opacity: full ? 0.4 : 1,
+                    cursor: full ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 4,
+                      flexShrink: 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: picked ? 'var(--orange)' : 'rgba(20,12,8,0.6)',
+                      border: `1.5px solid ${picked ? 'var(--orange)' : 'var(--border)'}`,
+                      color: picked ? 'white' : 'var(--text-faint)',
+                    }}
+                  >
+                    {picked ? <Check className="w-3 h-3" strokeWidth={3} /> : <Plus className="w-3 h-3" strokeWidth={3} />}
+                  </span>
+                  {lang}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="italic-serif" style={{ fontSize: 13, color: 'var(--text-faint)', marginTop: 4 }}>
+          Your race and background grant no extra language choices.
         </div>
       )}
     </div>
