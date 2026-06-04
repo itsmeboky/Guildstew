@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Heart, Shield, Swords, Skull, Users, GraduationCap, UserRound, BookOpen, Circle } from "lucide-react";
 import CompanionPicker from "@/components/characterCreator/CompanionPicker";
 import { bondsForClass } from "@/components/characterCreator/bondsSections";
 import { CLASSES_DATA, CLASS_ACCENT } from "@/components/characterCreator/ClassStep";
@@ -42,6 +43,34 @@ const RELATIONSHIP_TYPES = [
 const newRelationshipId = () =>
   (globalThis.crypto?.randomUUID?.() ||
     `rel_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+
+// Type → portrait ring + icon. `color` is the solid accent (ring + icon +
+// glow); `ring` is the frame gradient (Romantic gets pink→red per the
+// brief, the rest are a soft single-hue gradient off `color`). Reuses the
+// creator's class-accent palette values where they fit (--gold for family).
+const TYPE_META = {
+  romantic: { color: "#FF4DA6", ring: "linear-gradient(135deg, #FF4DA6, #FF5040)", Icon: Heart },
+  ally:     { color: "#52D880", ring: "linear-gradient(135deg, #52D880, #2F9E5B)", Icon: Shield },
+  friend:   { color: "#52D880", ring: "linear-gradient(135deg, #6FE39A, #3FB873)", Icon: Heart },
+  rival:    { color: "var(--orange)", ring: "linear-gradient(135deg, #FF7A40, #FF5300)", Icon: Swords },
+  enemy:    { color: "#FF5040", ring: "linear-gradient(135deg, #FF5040, #B5241B)", Icon: Skull },
+  family:   { color: "var(--gold)", ring: "linear-gradient(135deg, #E8C56B, #B8862F)", Icon: Users },
+  mentor:   { color: "#5AA0FF", ring: "linear-gradient(135deg, #7CB6FF, #3F7FE0)", Icon: GraduationCap },
+  student:  { color: "#5AA0FF", ring: "linear-gradient(135deg, #8FC4FF, #5A8FD8)", Icon: BookOpen },
+  contact:  { color: "#7B8AA0", ring: "linear-gradient(135deg, #94A2B8, #5E6B7E)", Icon: UserRound },
+  neutral:  { color: "#7B8AA0", ring: "linear-gradient(135deg, #8A97AB, #5E6B7E)", Icon: Circle },
+};
+const typeMeta = (t) => TYPE_META[t] || TYPE_META.neutral;
+
+// Value-band fill color, shared by the affinity + trust bars. Cutoffs are
+// tunable. gold (max) → green (positive) → orange (souring) → red (critical).
+function bandColor(value) {
+  const n = Math.max(0, Math.min(100, Number(value) || 0));
+  if (n >= 85) return "var(--gold)";
+  if (n >= 50) return "#52D880";
+  if (n >= 25) return "var(--orange)";
+  return "#FF5040";
+}
 
 export default function BondsAndAlliesStep({ characterData, updateCharacterData, campaignId }) {
   // 2024 doesn't get this step — it's filtered out of the step list upstream
@@ -409,7 +438,7 @@ function OtherRelationships({ data, update }) {
   const addRelationship = () => {
     setAll([
       ...relationships,
-      { id: newRelationshipId(), name: "", bio: "", image: "", type: "ally", affinity: 50 },
+      { id: newRelationshipId(), name: "", bio: "", image: "", type: "ally", affinity: 50, trust: 50 },
     ]);
   };
 
@@ -500,7 +529,13 @@ function RelationshipCard({ rel, accent, onChange, onRemove }) {
         position: "relative",
       }}
     >
-      <AllyPortrait src={rel.image} onChange={(img) => onChange({ image: img })} />
+      <TypeRingPortrait
+        type={rel.type}
+        src={rel.image}
+        affinity={rel.affinity ?? 50}
+        trust={rel.trust ?? 50}
+        onChange={(img) => onChange({ image: img })}
+      />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -544,11 +579,13 @@ function RelationshipCard({ rel, accent, onChange, onRemove }) {
           />
         </div>
 
-        <StartingBar
-          value={rel.affinity ?? 50}
-          accent={accent}
-          onChange={(v) => onChange({ affinity: v })}
-        />
+        {/* Dual bars mirror the PC↔PC character_relationships fields
+            (affinity + trust) so Phase 3 is a clean copy, not a translation.
+            Each fill is colored by value band. */}
+        <div style={{ display: "flex", gap: 16 }}>
+          <ValueBar label="Affinity" value={rel.affinity ?? 50} onChange={(v) => onChange({ affinity: v })} />
+          <ValueBar label="Trust" value={rel.trust ?? 50} onChange={(v) => onChange({ trust: v })} />
+        </div>
 
         <button
           type="button"
@@ -574,17 +611,18 @@ function RelationshipCard({ rel, accent, onChange, onRemove }) {
   );
 }
 
-// Starting-standing meter — the same range + bar vocabulary the party
-// panel's RelationshipsTab uses, restyled in the creator's idiom. This is
-// captured as INTENT only; it is not wired to any live relationship edge
-// yet (a later phase reads it when the character joins a campaign).
-function StartingBar({ value, accent, onChange }) {
+// A starting-standing meter — same range + bar vocabulary the party panel's
+// RelationshipsTab uses, restyled in the creator's idiom. The fill is colored
+// by value band (bandColor). Captured as INTENT only; not wired to any live
+// relationship edge yet (Phase 3 reads it when the character joins a campaign).
+function ValueBar({ label, value, onChange }) {
   const pct = Math.max(0, Math.min(100, Number(value) || 0));
+  const c = bandColor(pct);
   return (
-    <div>
+    <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-        <span className="label" style={{ color: "var(--text-dim)" }}>Starting standing</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: accent }}>{pct}</span>
+        <span className="label" style={{ color: "var(--text-dim)" }}>{label}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: c }}>{pct}</span>
       </div>
       <input
         type="range"
@@ -592,7 +630,7 @@ function StartingBar({ value, accent, onChange }) {
         max="100"
         value={pct}
         onChange={(e) => onChange(parseInt(e.target.value, 10))}
-        style={{ width: "100%", accentColor: accent, cursor: "pointer" }}
+        style={{ width: "100%", accentColor: c, cursor: "pointer" }}
       />
       <div
         aria-hidden
@@ -610,10 +648,69 @@ function StartingBar({ value, accent, onChange }) {
           style={{
             height: "100%",
             width: `${pct}%`,
-            background: `linear-gradient(90deg, ${accent}99, ${accent})`,
-            transition: "width .15s",
+            background: `linear-gradient(90deg, ${c}99, ${c})`,
+            transition: "width .15s, background .15s",
           }}
         />
+      </div>
+    </div>
+  );
+}
+
+// Portrait with a type-keyed ring + a small type icon — a styling layer over
+// AllyPortrait, not a new portrait control. Flourish: the ring's vividness
+// tracks the combined bar state — vivid + glowing when both bars are high,
+// desaturating to grey when both are low — so the frame doubles as a
+// glance-able health cue layered on the relationship type.
+function TypeRingPortrait({ type, src, affinity, trust, onChange }) {
+  const meta = typeMeta(type);
+  const Icon = meta.Icon;
+  const vibe = (Math.max(0, Math.min(100, Number(affinity) || 0)) +
+    Math.max(0, Math.min(100, Number(trust) || 0))) / 200; // 0..1
+  // Below ~0.35 the frame greys out; mid gets a soft glow; high gets a
+  // strong glow. (Opacity is NOT set on the frame — that would also fade
+  // the portrait child; the dimming is baked into the ring color instead.)
+  const dim = vibe < 0.35;
+  const ringBg = dim ? "linear-gradient(135deg, #5A6473, #3A4250)" : meta.ring;
+  const glow =
+    vibe > 0.7 ? `0 0 16px ${meta.color}66`
+      : vibe > 0.35 ? `0 0 8px ${meta.color}33`
+        : "none";
+  return (
+    <div style={{ position: "relative" }}>
+      <div
+        style={{
+          padding: 4,
+          borderRadius: 12,
+          background: ringBg,
+          boxShadow: glow,
+          transition: "box-shadow .2s, background .2s",
+        }}
+      >
+        <div style={{ borderRadius: 9, overflow: "hidden" }}>
+          <AllyPortrait src={src} onChange={onChange} />
+        </div>
+      </div>
+      <div
+        title={type}
+        style={{
+          position: "absolute",
+          bottom: -8,
+          left: -8,
+          width: 30,
+          height: 30,
+          borderRadius: "50%",
+          background: "var(--page-bg-1, #0B131C)",
+          border: `2px solid ${dim ? "#5A6473" : meta.color}`,
+          color: dim ? "#8A97AB" : meta.color,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
+          transition: "all .2s",
+        }}
+      >
+        <Icon className="w-4 h-4" strokeWidth={2.4} />
       </div>
     </div>
   );
