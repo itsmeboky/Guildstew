@@ -6,7 +6,10 @@ import {
   abilityModifier,
   proficiencyBonus,
   CLASS_SAVING_THROWS,
+  getRaceLanguages,
+  ALL_LANGUAGES,
 } from '@/components/dnd5e/dnd5eRules';
+import { getBackgroundLanguages } from "@/components/dnd5e/backgroundData";
 import { calculateMaxHP } from "@/components/dnd5e/characterCalculations";
 import { deriveArmorClass } from "@/components/dnd5e/deriveCharacterStats";
 import { safeText } from "@/utils/safeRender";
@@ -407,20 +410,15 @@ export default function ReviewStep({ characterData }) {
                 </div>
               ))}
             </div>
-            {Array.isArray(characterData.languages) && characterData.languages.length > 0 && (
-              <div
-                className="italic-serif"
-                style={{
-                  fontSize: 12,
-                  color: 'var(--text-faint)',
-                  marginTop: 10,
-                }}
-              >
-                Languages: {characterData.languages.join(', ')}
-              </div>
-            )}
           </ReviewCard>
         )}
+
+        {/* Languages get their own card so they always show (not just for
+            races with traits) and read clearly, matching the other recap
+            cards rather than a buried footnote. It also flags any unfilled
+            choice slots — e.g. after a class change reset the picks are
+            cleared, and this is where the player is told to go re-pick. */}
+        <LanguagesReviewCard characterData={characterData} />
 
         <SpellbookReviewCard
           spells={characterData.spells || {}}
@@ -1034,6 +1032,58 @@ function SpellTooltip({ name, info, accent }) {
         {info.description}
       </p>
     </div>
+  );
+}
+
+// ============================================================================
+// Languages card — known (granted + chosen) plus a callout for any unfilled
+// choice slots. Slots are re-derived from race / subrace / background here so
+// the recap can warn the player to go pick — important after a class change,
+// which resets the chosen languages.
+// ============================================================================
+function LanguagesReviewCard({ characterData }) {
+  const langs = Array.isArray(characterData.languages) ? characterData.languages : [];
+  const { fixed: granted, choices: raceChoices } = getRaceLanguages(
+    characterData.race,
+    characterData.subrace,
+  );
+  const totalSlots = raceChoices + (getBackgroundLanguages(characterData.background) || 0);
+  const picked = langs.filter((l) => !granted.includes(l) && ALL_LANGUAGES.includes(l)).length;
+  const left = Math.max(0, totalSlots - picked);
+
+  if (langs.length === 0 && totalSlots === 0) return null;
+
+  return (
+    <ReviewCard title={`Languages · ${langs.length}`} icon="🗣️">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {langs.map((lang) => (
+          <span key={lang} className="chip chip-gold" style={{ fontSize: 12 }}>
+            {safeText(lang)}
+          </span>
+        ))}
+      </div>
+      {left > 0 && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: '8px 12px',
+            borderRadius: 6,
+            background: 'rgba(255, 83, 0, 0.10)',
+            border: '1px solid var(--orange-soft)',
+            color: 'var(--orange-soft)',
+            fontSize: 12.5,
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 14 }}>⚠</span>
+          You still have {left} language{left === 1 ? '' : 's'} to choose — hop back to
+          “Skills &amp; Languages” to pick {left === 1 ? 'it' : 'them'}.
+        </div>
+      )}
+    </ReviewCard>
   );
 }
 

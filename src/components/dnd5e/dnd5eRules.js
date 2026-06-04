@@ -1979,6 +1979,43 @@ export const LANGUAGES = {
   },
 };
 
+// Flat, ordered list of every selectable SRD language (standard + exotic).
+// Primordial's elemental dialects (Aquan/Auran/Ignan/Terran) are NOT separate
+// picks under SRD 5.1 — they're dialects of Primordial — so they're excluded
+// from the picker.
+export const ALL_LANGUAGES = [...LANGUAGES.standard, ...LANGUAGES.exotic];
+
+/**
+ * Languages a race + subrace grant. Reads the RACES registry as source of
+ * truth: each race's `languages` array lists fixed languages plus the
+ * sentinel '+1 choice' for a bonus slot (Human, Half-Elf). A subrace adds a
+ * slot either via its own '+1 choice' sentinel or the 'Extra Language'
+ * feature (High Elf). Returns:
+ *   { fixed: string[]  – auto-granted (always includes Common),
+ *     choices: number  – how many extra languages the player may pick }
+ */
+export function getRaceLanguages(race, subrace) {
+  const r = RACES[race];
+  const fixed = [];
+  let choices = 0;
+  const take = (l) => {
+    if (l === '+1 choice') choices += 1;
+    else if (l && !fixed.includes(l)) fixed.push(l);
+  };
+  (r?.languages || []).forEach(take);
+  const sub = r?.subraces?.[subrace];
+  if (sub) {
+    (sub.languages || []).forEach(take);
+    // High Elf (and any future subrace) expresses its bonus language as a
+    // feature rather than a sentinel — honor it without hard-coding the race.
+    if (Array.isArray(sub.features) && sub.features.includes('Extra Language')) {
+      choices += 1;
+    }
+  }
+  if (fixed.length === 0) fixed.push('Common'); // brewery / unknown race fallback
+  return { fixed, choices };
+}
+
 // ─────────────────────────────────────────────
 // TOOL PROFICIENCIES
 // ─────────────────────────────────────────────
