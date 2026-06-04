@@ -1,7 +1,7 @@
 import { useAuth } from '@/lib/AuthContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
 import { trackEvent } from '@/utils/analytics';
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { supabase } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,6 +35,7 @@ import IdentityStep from "@/components/characterCreator/IdentityStep";
 import IdentityStep2024 from "@/components/characterCreator/IdentityStep2024";
 import ClassStep from "@/components/characterCreator/ClassStep";
 import ClassStep2024 from "@/components/characterCreator/ClassStep2024";
+import BondsAndAlliesStep from "@/components/characterCreator/BondsAndAlliesStep";
 import AbilityScoresStep from "@/components/characterCreator/AbilityScoresStep";
 import AbilitiesStep2024 from "@/components/characterCreator/AbilitiesStep2024";
 import ClassFeaturesStep from "@/components/characterCreator/ClassFeaturesStep";
@@ -62,13 +63,20 @@ import { themeForClass } from "@/data/character-creator-class-themes";
 // Step order follows the dependency chain: class (level + subclass) →
 // abilities (casting modifier) → spells → features (invocations can now
 // see cantrips chosen on the Spells step) → skills → equipment → review.
-const STEPS = [
+// The full 2014 step set. The component filters this per game-pack into the
+// active `STEPS` list (see `STEPS` useMemo in the component) — the
+// 'bonds' step is 2014-only and is dropped from the 2024 flow, which has no
+// Bonds & Allies step yet. STEP_DEFS in chrome/Stepper.jsx mirrors this
+// order; the component passes the filtered list to <Stepper> so the
+// indicator and the step components stay index-aligned per pack.
+const ALL_STEPS = [
   { id: 'identity', label: 'Identity', component: IdentityStep },
   { id: 'class', label: 'Class & Path', component: ClassStep },
   { id: 'abilities', label: 'Abilities', component: AbilityScoresStep },
   { id: 'spells', label: 'Spells', component: SpellsStep },
   { id: 'features', label: 'Features', component: ClassFeaturesStep },
   { id: 'skills', label: 'Skills', component: SkillsStep },
+  { id: 'bonds', label: 'Bonds & Allies', component: BondsAndAlliesStep },
   { id: 'equipment', label: 'Equipment', component: EquipmentStep },
   { id: 'review', label: 'Review', component: ReviewStep }
 ];
@@ -200,9 +208,26 @@ export default function CharacterCreator() {
     appearance: {},
     description: "",
     expertise: [], // Added for passive perception calculation
+    // Class-gated bond flavor (deity/patron/familiar/circle), keyed by
+    // bond key. Free-create relationships (allies/rivals/enemies) the
+    // player adds on the Bonds & Allies step. Both persist inside the
+    // creator_data jsonb blob; relationships survive a class change.
+    allies: {},
+    relationships: [],
   });
 
   const previousClassRef = useRef(characterData.class);
+
+  // Active step list for this game pack. The Bonds & Allies step ships for
+  // 2014 only; 2024 keeps its existing flow (a 2024 bonds step is a separate
+  // task) so it's filtered out, keeping the 2024 nav indices unchanged. Every
+  // in-component reference to STEPS (validation, nav, the per-step dispatch,
+  // and the <Stepper> it's passed to) reads this filtered list, so indices
+  // stay correct for each pack.
+  const STEPS = useMemo(
+    () => ALL_STEPS.filter((s) => !(s.id === 'bonds' && characterData.gamePack === 'dnd5e_2024')),
+    [characterData.gamePack],
+  );
 
   // Mandatory edit-pass: load the campaign's ban list and recompute
   // violations live as the player edits. Only runs in
@@ -292,6 +317,9 @@ export default function CharacterCreator() {
           // Brief B's deity/familiar/mount/circle flavor — rehydrated from
           // the blob (no v1 column ever existed for it).
           allies: creatorData.allies || existingCharacter.allies || prev.allies || {},
+          // Free-create relationships from the Bonds & Allies step — also
+          // in the blob; fall back to a column read then default.
+          relationships: creatorData.relationships || existingCharacter.relationships || prev.relationships || [],
           inventory: existingCharacter.inventory || prev.inventory,
           equipment: existingCharacter.equipment || prev.equipment,
           // Equipment-selector UI state (M4) so the EquipmentStep
@@ -356,6 +384,11 @@ export default function CharacterCreator() {
         avatar_zoom: characterData.avatar_zoom || 1,
         profile_position: characterData.profile_position || { x: 0, y: 0 },
         profile_zoom: characterData.profile_zoom || 1,
+        // Free-create relationships are class-independent — a backstory
+        // rival shouldn't vanish when the player re-picks their class.
+        // (Gated bonds in `allies` are deliberately NOT carried: they're
+        // re-derived from the new class on the Bonds & Allies step.)
+        relationships: characterData.relationships || [],
       };
 
       setCharacterData({
@@ -643,6 +676,10 @@ export default function CharacterCreator() {
         // Bard / Cleric / Druid / Warlock / Wizard at L1, leaving
         // every prepared/known caster stuck on this step.
         return getSpellsCompletion(characterData).isComplete;
+      case 'bonds':
+        // Bonds & Allies is all optional flavor (gated bonds + free-create
+        // relationships) — nothing gates progress.
+        return true;
       case 'equipment':
         return true;
       case 'review':
@@ -1063,6 +1100,7 @@ const handleSubmit = () => {
           current={currentStep}
           completed={completedSteps}
           onClick={handleStepClick}
+          steps={STEPS}
         />
 
         <div key={currentStep} className="step-content" style={{ marginBottom: 6 }}>
