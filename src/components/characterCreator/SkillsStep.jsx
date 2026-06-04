@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { Check, Star, Lock } from "lucide-react";
+import { Check, Star, Lock, Plus } from "lucide-react";
 import { getBackgroundSkills } from "@/components/dnd5e/backgroundData";
 import { getRaceSkillProficiencies } from "@/components/dnd5e/raceData";
 import {
@@ -361,6 +361,13 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
               else if (!isClassSkill && selectedFromRacialBonus < racialBonusSkills && racialPickAllowed) canSelect = true;
             }
 
+            // 'avail'        — a class-list skill you can still pick (orange).
+            // 'avail-racial' — a non-class skill you can take as your racial
+            //                  "choose any" bonus (gold). Previously these
+            //                  fell through to 'locked' and rendered greyed/
+            //                  disabled even though they're selectable — the
+            //                  affordance contradicted the "any skill" copy.
+            // 'locked'       — genuinely unpickable (shown for the modifier).
             const status = isFixedRacial
               ? 'racial'
               : isMulticlass
@@ -369,9 +376,11 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
                   ? 'bg'
                   : isProficient
                     ? 'pick'
-                    : isClassSkill
+                    : isClassSkill && canSelect
                       ? 'avail'
-                      : 'locked';
+                      : canSelect
+                        ? 'avail-racial'
+                        : 'locked';
 
             const modifier = getSkillModifier(skill);
 
@@ -381,6 +390,7 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
                 skill={skill}
                 ability={SKILL_ABILITY_MAP[skill]}
                 status={status}
+                choosable={canSelect}
                 modifier={modifier}
                 hasExpertise={hasExpertise}
                 disabled={
@@ -410,8 +420,9 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
               className="italic-serif"
               style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 12, textAlign: 'center' }}
             >
-              Greyed-out skills aren't on your {characterData.class} list. They appear here so you
-              can see your full skill modifier (without proficiency).
+              Dimmed skills aren't available to you right now — they appear here so you can see
+              your full skill modifier. Any skill marked with a <strong>+</strong> can be picked
+              {racialBonusSkills > 0 ? ', including as your racial bonus' : ''}.
             </div>
           )}
       </div>
@@ -522,26 +533,37 @@ function RaceFixedBanner({ race, subrace, skills }) {
 // gold (racial), purple (multiclass), faint (avail), dimmest (locked).
 // ============================================================================
 function SkillRow({
-  skill, ability, status, modifier, hasExpertise,
+  skill, ability, status, choosable, modifier, hasExpertise,
   disabled, expertiseAllowed, onToggle, onExpertiseToggle,
 }) {
+  const [hover, setHover] = useState(false);
   const palette = {
-    bg:         { bg: 'rgba(55, 242, 209, 0.12)',  border: 'var(--teal)',   check: 'var(--teal)',   checkText: 'var(--ink)' },
-    pick:       { bg: 'rgba(255, 83, 0, 0.12)',    border: 'var(--orange)', check: 'var(--orange)', checkText: 'white' },
-    racial:     { bg: 'rgba(212, 169, 81, 0.10)',  border: 'var(--gold)',   check: 'var(--gold)',   checkText: 'var(--ink)' },
-    multiclass: { bg: 'rgba(201, 163, 255, 0.10)', border: 'var(--purple)', check: 'var(--purple)', checkText: 'white' },
-    avail:      { bg: 'rgba(20, 12, 8, 0.5)',      border: 'var(--border)', check: 'transparent',   checkText: 'transparent' },
-    locked:     { bg: 'rgba(20, 12, 8, 0.3)',      border: 'var(--border)', check: 'transparent',   checkText: 'transparent' },
+    bg:           { bg: 'rgba(55, 242, 209, 0.12)',  border: 'var(--teal)',   check: 'var(--teal)',   checkText: 'var(--ink)' },
+    pick:         { bg: 'rgba(255, 83, 0, 0.12)',    border: 'var(--orange)', check: 'var(--orange)', checkText: 'white' },
+    racial:       { bg: 'rgba(212, 169, 81, 0.10)',  border: 'var(--gold)',   check: 'var(--gold)',   checkText: 'var(--ink)' },
+    multiclass:   { bg: 'rgba(201, 163, 255, 0.10)', border: 'var(--purple)', check: 'var(--purple)', checkText: 'white' },
+    // Selectable-now states. They carry a tinted border + a "+" marker so
+    // they read as "click to add", not disabled. 'avail' = a class-list
+    // pick (orange); 'avail-racial' = a non-class skill you may take as your
+    // racial "choose any" bonus (gold).
+    avail:        { bg: 'rgba(255, 83, 0, 0.06)',    bgHover: 'rgba(255, 83, 0, 0.15)',    border: 'var(--orange)', check: 'var(--orange)', checkText: 'var(--orange)' },
+    'avail-racial':{ bg: 'rgba(212, 169, 81, 0.07)', bgHover: 'rgba(212, 169, 81, 0.16)', border: 'var(--gold)',   check: 'var(--gold)',   checkText: 'var(--gold)' },
+    locked:       { bg: 'rgba(20, 12, 8, 0.3)',      border: 'var(--border)', check: 'transparent',   checkText: 'transparent' },
   };
-  const p = palette[status] || palette.avail;
+  const p = palette[status] || palette.locked;
   const isProficient = status === 'bg' || status === 'pick' || status === 'racial' || status === 'multiclass';
   const locked = status === 'locked';
+  // A row that's selectable right now (not yet proficient): show the "+"
+  // affordance, a tinted dashed border, and a real hover lift.
+  const pickable = choosable && !isProficient;
 
   return (
     <button
       type="button"
       onClick={disabled ? undefined : onToggle}
       disabled={disabled && !isProficient}
+      onMouseEnter={() => pickable && setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         all: 'unset',
         cursor: disabled && !isProficient ? 'not-allowed' : 'pointer',
@@ -549,13 +571,19 @@ function SkillRow({
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        background: p.bg,
-        border: `1.5px solid ${p.border}`,
+        background: pickable && hover ? (p.bgHover || p.bg) : p.bg,
+        border: pickable ? `1.5px dashed ${p.border}` : `1.5px solid ${p.border}`,
         borderRadius: 8,
         opacity: locked ? 0.4 : 1,
+        transform: pickable && hover ? 'translateY(-1px)' : 'none',
+        boxShadow: pickable && hover ? `0 0 0 1px ${p.border}, 0 4px 14px rgba(0,0,0,0.4)` : 'none',
         transition: 'all .12s',
       }}
-      title={ability ? `Roll with ${ability.toUpperCase()}` : skill}
+      title={
+        pickable
+          ? `Click to add ${skill}${status === 'avail-racial' ? ' as your racial bonus' : ''}`
+          : ability ? `Roll with ${ability.toUpperCase()}` : skill
+      }
     >
       <div
         style={{
@@ -572,6 +600,7 @@ function SkillRow({
         }}
       >
         {isProficient && <Check className="w-3 h-3" strokeWidth={3} />}
+        {pickable && <Plus className="w-3 h-3" strokeWidth={3} />}
       </div>
 
       <div style={{ minWidth: 0, flex: 1 }}>
