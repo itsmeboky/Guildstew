@@ -400,18 +400,21 @@ export default function ReviewStep({ characterData }) {
                 </div>
               ))}
             </div>
-            {Array.isArray(characterData.languages) && characterData.languages.length > 0 && (
-              <div
-                className="italic-serif"
-                style={{
-                  fontSize: 12,
-                  color: 'var(--text-faint)',
-                  marginTop: 10,
-                }}
-              >
-                Languages: {characterData.languages.join(', ')}
-              </div>
-            )}
+          </ReviewCard>
+        )}
+
+        {/* Languages get their own card so they always show (not just for
+            races with traits) and read clearly, matching the other recap
+            cards rather than a buried footnote. */}
+        {Array.isArray(characterData.languages) && characterData.languages.length > 0 && (
+          <ReviewCard title={`Languages · ${characterData.languages.length}`} icon="🗣️">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {characterData.languages.map((lang) => (
+                <span key={lang} className="chip chip-gold" style={{ fontSize: 12 }}>
+                  {safeText(lang)}
+                </span>
+              ))}
+            </div>
           </ReviewCard>
         )}
 
