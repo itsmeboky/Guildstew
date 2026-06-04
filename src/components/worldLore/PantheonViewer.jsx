@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Eye, EyeOff, Edit, Trash2 } from "lucide-react";
+import { Sparkles, EyeOff, Edit, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 const RELATIONSHIP_COLORS = {
