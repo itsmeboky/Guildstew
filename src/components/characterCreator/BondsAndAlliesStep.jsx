@@ -27,7 +27,7 @@ import { Select } from "@/components/characterCreator/chrome/forms/Select";
 
 // Free-create relationship types — mirrors the party panel's RelationshipsTab
 // vocabulary so the lore tab / party panel can render them consistently later.
-const RELATIONSHIP_TYPES = [
+export const RELATIONSHIP_TYPES = [
   { value: "ally", label: "Ally" },
   { value: "friend", label: "Friend" },
   { value: "rival", label: "Rival" },
@@ -48,7 +48,7 @@ const newRelationshipId = () =>
 // glow); `ring` is the frame gradient (Romantic gets pink→red per the
 // brief, the rest are a soft single-hue gradient off `color`). Reuses the
 // creator's class-accent palette values where they fit (--gold for family).
-const TYPE_META = {
+export const TYPE_META = {
   romantic: { color: "#FF4DA6", ring: "linear-gradient(135deg, #FF4DA6, #FF5040)", Icon: Heart },
   ally:     { color: "#52D880", ring: "linear-gradient(135deg, #52D880, #2F9E5B)", Icon: Shield },
   friend:   { color: "#52D880", ring: "linear-gradient(135deg, #6FE39A, #3FB873)", Icon: Heart },
@@ -60,11 +60,11 @@ const TYPE_META = {
   contact:  { color: "#7B8AA0", ring: "linear-gradient(135deg, #94A2B8, #5E6B7E)", Icon: UserRound },
   neutral:  { color: "#7B8AA0", ring: "linear-gradient(135deg, #8A97AB, #5E6B7E)", Icon: Circle },
 };
-const typeMeta = (t) => TYPE_META[t] || TYPE_META.neutral;
+export const typeMeta = (t) => TYPE_META[t] || TYPE_META.neutral;
 
 // Value-band fill color, shared by the affinity + trust bars. Cutoffs are
 // tunable. gold (max) → green (positive) → orange (souring) → red (critical).
-function bandColor(value) {
+export function bandColor(value) {
   const n = Math.max(0, Math.min(100, Number(value) || 0));
   if (n >= 85) return "var(--gold)";
   if (n >= 50) return "#52D880";
@@ -308,6 +308,9 @@ function AllyCard({ bond, accent, data, update }) {
             style={{
               resize: "vertical",
               minHeight: 70,
+              // Cap the height so a long bond bio scrolls in-field.
+              maxHeight: 140,
+              overflowY: "auto",
               fontFamily: "var(--serif)",
               fontStyle: "italic",
               fontSize: 14,
@@ -571,6 +574,10 @@ function RelationshipCard({ rel, accent, onChange, onRemove }) {
             style={{
               resize: "vertical",
               minHeight: 56,
+              // Cap the height so a long bio scrolls inside the field
+              // instead of blowing the card open.
+              maxHeight: 120,
+              overflowY: "auto",
               fontFamily: "var(--serif)",
               fontStyle: "italic",
               fontSize: 14,

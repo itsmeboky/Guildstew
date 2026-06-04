@@ -12,6 +12,13 @@ import { deriveArmorClass } from "@/components/dnd5e/deriveCharacterStats";
 import { safeText } from "@/utils/safeRender";
 import CompanionCard from "@/components/characters/CompanionCard";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { bondsForClass } from "@/components/characterCreator/bondsSections";
+import { CLASSES_DATA } from "@/components/characterCreator/ClassStep";
+import {
+  RELATIONSHIP_TYPES,
+  typeMeta,
+  bandColor,
+} from "@/components/characterCreator/BondsAndAlliesStep";
 
 // Per-class portrait icons used by the ribbon under the hero card.
 // Mirrors the table that lives on ClassStep — dropped to a flat
@@ -491,6 +498,8 @@ export default function ReviewStep({ characterData }) {
         )}
 
         <CompanionsReviewCard characterData={characterData} />
+
+        <BondsReviewCard characterData={characterData} />
 
         {Array.isArray(characterData.inventory) && characterData.inventory.length > 0 && (
           <ReviewCard title={`Equipment · ${characterData.inventory.length}`} icon="🎒">
@@ -1054,5 +1063,171 @@ function CompanionsReviewCard({ characterData }) {
         ))}
       </div>
     </ReviewCard>
+  );
+}
+
+// ============================================================================
+// Bonds & Allies recap — the class-gated bonds (patron / deity / circle /
+// mount) plus the free-create relationships. Familiars are shown by the
+// Companions card above, so companion-picker sections are skipped here.
+// Mirrors the gated-bond rendering from the Bonds & Allies step.
+// ============================================================================
+const TYPE_LABELS = Object.fromEntries(RELATIONSHIP_TYPES.map((t) => [t.value, t.label]));
+
+function BondsReviewCard({ characterData }) {
+  const cls =
+    (CLASSES_DATA || []).find((c) => c.name === characterData.class) ||
+    (characterData.class ? { name: characterData.class } : null);
+  const sections = cls ? bondsForClass(cls, characterData) : [];
+  const allies = characterData.allies || {};
+
+  // Class-gated bond lines, in the order bondsForClass emits them.
+  const bondLines = [];
+  for (const s of sections) {
+    if (s.type === "patron") {
+      if (characterData.subclass) {
+        bondLines.push({ key: s.key, label: "Patron", name: characterData.subclass });
+      }
+    } else if (s.type === "flavor") {
+      const a = allies[s.key] || {};
+      if (a.name || a.desc || a.image) {
+        bondLines.push({ key: s.key, label: s.label, name: a.name, bio: a.desc, image: a.image });
+      }
+    } else if (s.type === "mount-flag") {
+      bondLines.push({ key: s.key, label: "Celestial Mount", name: "Summoned with Find Steed" });
+    }
+    // companion-picker → rendered by CompanionsReviewCard above.
+  }
+
+  const relationships = Array.isArray(characterData.relationships)
+    ? characterData.relationships.filter((r) => r && (r.name || r.bio || r.image))
+    : [];
+
+  if (bondLines.length === 0 && relationships.length === 0) return null;
+
+  return (
+    <ReviewCard title="Bonds & Allies" icon="🤝">
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {bondLines.map((b) => (
+          <BondLineRow key={b.key} bond={b} />
+        ))}
+        {relationships.map((rel, i) => (
+          <RelationshipReviewRow key={rel.id || i} rel={rel} />
+        ))}
+      </div>
+    </ReviewCard>
+  );
+}
+
+function BondLineRow({ bond }) {
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+      {bond.image && (
+        <img
+          src={bond.image}
+          alt=""
+          style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+        />
+      )}
+      <div style={{ minWidth: 0 }}>
+        <div className="label" style={{ color: "var(--gold)", marginBottom: 2 }}>{bond.label}</div>
+        <div className="display" style={{ fontSize: 16, color: "var(--text)" }}>
+          {safeText(bond.name) || <span style={{ color: "var(--text-faint)" }}>—</span>}
+        </div>
+        {bond.bio && <BioScroll text={bond.bio} />}
+      </div>
+    </div>
+  );
+}
+
+function RelationshipReviewRow({ rel }) {
+  const meta = typeMeta(rel.type);
+  const Icon = meta.Icon;
+  const affinity = Math.max(0, Math.min(100, Number(rel.affinity ?? 50)));
+  const trust = Math.max(0, Math.min(100, Number(rel.trust ?? 50)));
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+      {/* type-ringed avatar — image if set, else the type icon */}
+      <div style={{ flexShrink: 0, padding: 3, borderRadius: 10, background: meta.ring }}>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 7,
+            overflow: "hidden",
+            background: rel.image ? `url(${rel.image}) center/cover` : "var(--page-bg-1, #0B131C)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: meta.color,
+          }}
+        >
+          {!rel.image && <Icon className="w-5 h-5" strokeWidth={2.2} />}
+        </div>
+      </div>
+
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <span className="display" style={{ fontSize: 16, color: "var(--text)" }}>
+            {safeText(rel.name) || "Unnamed"}
+          </span>
+          <span
+            className="chip"
+            style={{ fontSize: 10, padding: "1px 7px", color: meta.color, borderColor: meta.color }}
+          >
+            {TYPE_LABELS[rel.type] || "Ally"}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+          <MiniBar label="Affinity" value={affinity} />
+          <MiniBar label="Trust" value={trust} />
+        </div>
+        {rel.bio && <BioScroll text={rel.bio} />}
+      </div>
+    </div>
+  );
+}
+
+function MiniBar({ label, value }) {
+  const c = bandColor(value);
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, marginBottom: 3 }}>
+        <span style={{ color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: 1 }}>{label}</span>
+        <span style={{ color: c, fontWeight: 700 }}>{value}</span>
+      </div>
+      <div
+        style={{
+          height: 5,
+          borderRadius: 999,
+          background: "rgba(20,12,8,0.6)",
+          overflow: "hidden",
+          border: "1px solid var(--border-faint)",
+        }}
+      >
+        <div style={{ height: "100%", width: `${value}%`, background: `linear-gradient(90deg, ${c}99, ${c})` }} />
+      </div>
+    </div>
+  );
+}
+
+// Read-only bio in a fixed-max-height scroll box so a long bio can't blow
+// out the recap layout (mirrors the in-field cap on the cards themselves).
+function BioScroll({ text }) {
+  return (
+    <p
+      className="italic-serif"
+      style={{
+        fontSize: 13,
+        color: "var(--text-dim)",
+        lineHeight: 1.5,
+        margin: "6px 0 0",
+        whiteSpace: "pre-wrap",
+        maxHeight: 84,
+        overflowY: "auto",
+      }}
+    >
+      {safeText(text)}
+    </p>
   );
 }
