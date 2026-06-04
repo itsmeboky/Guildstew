@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, X, Eye, EyeOff, Save, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { uploadFile } from "@/utils/uploadFile";
+import { BUCKETS } from "@/config/storageConfig";
 
 const ALIGNMENTS = [
   "Lawful Good", "Neutral Good", "Chaotic Good",
@@ -22,7 +23,7 @@ const RELATIONSHIP_TYPES = [
   { value: "neutral", label: "Neutral", color: "#6b7280" }
 ];
 
-export default function DeityEditor({ deity, deities, entries, onSave, onCancel }) {
+export default function DeityEditor({ deity, deities, entries, campaignId, onSave, onCancel }) {
   const [name, setName] = useState(deity?.name || "");
   const [title, setTitle] = useState(deity?.title || "");
   const [imageUrl, setImageUrl] = useState(deity?.image_url || "");
@@ -32,6 +33,7 @@ export default function DeityEditor({ deity, deities, entries, onSave, onCancel 
   const [holyText, setHolyText] = useState(deity?.holy_text || "");
   const [description, setDescription] = useState(deity?.description || "");
   const [followers, setFollowers] = useState(deity?.followers || "");
+  const [religion, setReligion] = useState(deity?.religion || "");
   const [relationships, setRelationships] = useState(deity?.relationships || []);
   const [entryId, setEntryId] = useState(deity?.entry_id || "");
   const [discovered, setDiscovered] = useState(deity?.discovered !== false);
@@ -39,13 +41,20 @@ export default function DeityEditor({ deity, deities, entries, onSave, onCancel 
   const [uploadingImage, setUploadingImage] = useState(false);
   const [newDomain, setNewDomain] = useState("");
 
+  // A GM-authored deity is campaign content → the campaign-assets bucket,
+  // under a structured per-campaign path (mirrors the character-portrait
+  // pipeline fix). The old base44.integrations.Core.UploadFile default
+  // targeted campaign-assets root with no path and skipped the helper.
+  const deityAssetPath = () =>
+    campaignId ? `campaigns/${campaignId}/deities` : "deities";
+
   const handleSymbolUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setUploadingSymbol(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await uploadFile(file, BUCKETS.SYSTEM, deityAssetPath());
       setSymbolUrl(file_url);
       toast.success("Symbol uploaded");
     } catch (error) {
@@ -61,7 +70,7 @@ export default function DeityEditor({ deity, deities, entries, onSave, onCancel 
 
     setUploadingImage(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await uploadFile(file, BUCKETS.SYSTEM, deityAssetPath());
       setImageUrl(file_url);
       toast.success("Image uploaded");
     } catch (error) {
@@ -109,6 +118,7 @@ export default function DeityEditor({ deity, deities, entries, onSave, onCancel 
       holy_text: holyText,
       description,
       followers,
+      religion: religion || null,
       relationships: relationships.filter(r => r.deity_id),
       entry_id: entryId || null,
       discovered
@@ -145,6 +155,17 @@ export default function DeityEditor({ deity, deities, entries, onSave, onCancel 
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="The Eternal Flame, The Dawn Bringer"
+                className="bg-[#2A3441] border-gray-700 text-white"
+              />
+            </div>
+
+            {/* Religion / Pantheon grouping */}
+            <div>
+              <label className="block text-sm font-semibold mb-2">Religion / Pantheon</label>
+              <Input
+                value={religion}
+                onChange={(e) => setReligion(e.target.value)}
+                placeholder="The Dawn Court, the Old Faith, the Nine..."
                 className="bg-[#2A3441] border-gray-700 text-white"
               />
             </div>
