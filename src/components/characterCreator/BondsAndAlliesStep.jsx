@@ -191,10 +191,19 @@ function GatedBonds({ sections, cls, accent, data, update, campaignId }) {
   );
 }
 
-// Read-only patron surface — the patron IS the Warlock subclass, chosen
-// on the Class step's subclass picker; this just reflects it (no re-pick).
+// Read-only patron surface — the patron IS the Warlock's Otherworldly Patron
+// subclass, chosen on the Class step. It is MANDATORY and always present: the
+// Class step gate blocks progress until a subclass is picked, and it's
+// persisted on save / restored on reopen (characterData.subclass). So this is
+// a pure read-out, never a prompt — there is no "unchosen patron" state. The
+// fallbacks below only guard a genuinely broken upstream state (and, for an
+// SRD Warlock with exactly one patron, still name it).
 function PatronReadout({ accent, subclass, cls }) {
-  const detail = (cls?.subclasses || []).find((s) => s.name === subclass) || null;
+  const patronName =
+    subclass
+    || (cls?.subclasses?.length === 1 ? cls.subclasses[0]?.name : null)
+    || "Otherworldly Patron";
+  const detail = (cls?.subclasses || []).find((s) => s.name === patronName) || null;
   return (
     <div
       style={{
@@ -207,7 +216,7 @@ function PatronReadout({ accent, subclass, cls }) {
     >
       <div className="label" style={{ color: accent, marginBottom: 4 }}>The being you serve</div>
       <div className="display" style={{ fontSize: 22, color: "var(--text)" }}>
-        {subclass || "Choose your patron on the Class step"}
+        {patronName}
       </div>
       {detail?.desc && (
         <div className="italic-serif" style={{ fontSize: 14, color: "var(--text-dim)", marginTop: 6, lineHeight: 1.5 }}>
