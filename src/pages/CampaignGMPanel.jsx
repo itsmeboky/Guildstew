@@ -7,6 +7,7 @@ import { createPageUrl } from "@/utils";
 import { Loader2 } from "lucide-react";
 import TimeTracker from "@/components/worldLore/TimeTracker";
 import LazyImage from "@/components/ui/LazyImage";
+import DeityApprovalDialog from "@/components/gm/DeityApprovalDialog";
 
 const CLASS_ICONS = {
   "Barbarian": "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a6652f2d8_Barbarian1.png",
@@ -168,6 +169,13 @@ export default function CampaignGMPanel() {
     <div className="relative min-h-screen">
       {/* Time Display */}
       <div className="fixed top-4 right-4 z-10 flex flex-col items-end gap-2">
+        {/* Pending player-submitted deity approvals — persistent badge so the
+            GM sees them in the lobby (pre-session), where they accept players,
+            instead of only inside the in-session GMPanel. */}
+        <DeityApprovalDialog
+          campaignId={campaignId}
+          isGM={campaign?.game_master_id === user?.id}
+        />
         {currentTime && (
           <div className="bg-[#2A3441]/90 backdrop-blur-sm rounded-lg px-4 py-2 border border-gray-700/50">
             <div className="text-right">
