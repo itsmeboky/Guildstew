@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
-  Play, UserPlus, UserCog, Megaphone, BookOpen, BarChart3, Settings,
+  Play, UserPlus, UserCog, Megaphone, BookOpen, BarChart3, Settings, Inbox,
 } from "lucide-react";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
@@ -10,6 +10,7 @@ import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { validateInstalledMods } from "@/lib/modEngine";
 import { supabase } from "@/api/supabaseClient";
+import PendingApprovalsPanel, { usePendingApprovals } from "@/components/gm/PendingApprovalsPanel";
 
 /**
  * Campaign Home — the lobby players and GMs see when they're NOT
@@ -29,6 +30,9 @@ export default function CampaignView() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [starting, setStarting] = useState(false);
+  // 'home' = the Currently-Playing overview; 'approvals' = the inline
+  // Pending Approvals view (GM-only, stays in this panel — no route change).
+  const [activeView, setActiveView] = useState("home");
 
   const { data: campaign } = useQuery({
     queryKey: ["campaign", campaignId],
@@ -57,6 +61,10 @@ export default function CampaignView() {
   const isGM = !!campaign
     && (campaign.game_master_id === user?.id
         || (Array.isArray(campaign.co_dm_ids) && campaign.co_dm_ids.includes(user?.id)));
+
+  // Pending player-submitted approvals (deity is the only wired type). Drives
+  // the nav-item count badge; the inline panel reuses the same query.
+  const { count: pendingCount } = usePendingApprovals(campaignId, isGM);
 
   const startSession = useMutation({
     mutationFn: async () => {
@@ -156,19 +164,43 @@ export default function CampaignView() {
       <aside className="w-64 flex-shrink-0 bg-[#1a1f2e] border-r border-slate-700/50 flex flex-col">
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
           {sidebarLinks.map(({ label, page, Icon, primary }) => (
-            <button
-              key={page}
-              type="button"
-              onClick={() => navigate(createPageUrl(page) + `?id=${campaignId}`)}
-              className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                primary
-                  ? "bg-[#37F2D1] text-[#050816] font-bold hover:bg-[#2dd9bd]"
-                  : "text-slate-300 hover:text-[#37F2D1] hover:bg-[#0f1219]"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span className="truncate">{label}</span>
-            </button>
+            <div key={page}>
+              <button
+                type="button"
+                onClick={() => navigate(createPageUrl(page) + `?id=${campaignId}`)}
+                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                  primary
+                    ? "bg-[#37F2D1] text-[#050816] font-bold hover:bg-[#2dd9bd]"
+                    : "text-slate-300 hover:text-[#37F2D1] hover:bg-[#0f1219]"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="truncate">{label}</span>
+              </button>
+
+              {/* Pending Approvals — GM-only, sits right beside Player
+                  Management. Inline view (no route change); badge only when
+                  there's something pending. */}
+              {isGM && label === "Player Management" && (
+                <button
+                  type="button"
+                  onClick={() => setActiveView((v) => (v === "approvals" ? "home" : "approvals"))}
+                  className={`mt-1 w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    activeView === "approvals"
+                      ? "bg-[#0f1219] text-[#37F2D1]"
+                      : "text-slate-300 hover:text-[#37F2D1] hover:bg-[#0f1219]"
+                  }`}
+                >
+                  <Inbox className="w-4 h-4" />
+                  <span className="truncate flex-1 text-left">Pending Approvals</span>
+                  {pendingCount > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-amber-400 text-[#1E2430] text-xs font-bold">
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
           ))}
         </nav>
       </aside>
@@ -191,6 +223,10 @@ export default function CampaignView() {
           </div>
         </div>
 
+        {isGM && activeView === "approvals" ? (
+          <PendingApprovalsPanel campaignId={campaignId} isGM={isGM} />
+        ) : (
+          <>
         {isGM && (
           <div className="flex gap-3 mb-8">
             <Button
@@ -232,6 +268,8 @@ export default function CampaignView() {
           </div>
         ) : (
           <p className="text-slate-500">No players yet. Invite some players to join!</p>
+        )}
+          </>
         )}
       </main>
     </div>

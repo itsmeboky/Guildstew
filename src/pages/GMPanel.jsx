@@ -76,7 +76,6 @@ import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import { preloadDiceModels } from "@/components/dice/DiceRoller";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import CustomCompanionApprovalDialog from "@/components/gm/CustomCompanionApprovalDialog";
-import DeityApprovalDialog from "@/components/gm/DeityApprovalDialog";
 import CallRollPicker from "@/components/gm/CallRollPicker";
 import GroupDiceArena from "@/components/combat/GroupDiceArena";
 import {
@@ -3064,13 +3063,6 @@ export default function GMPanel() {
 
             <CustomCompanionApprovalDialog
               characters={characters}
-              campaignId={campaignId}
-              isGM={isGM}
-            />
-
-            {/* Player-submitted custom deities (materialized on join) await
-                GM accept/reject here, alongside companion approvals. */}
-            <DeityApprovalDialog
               campaignId={campaignId}
               isGM={isGM}
             />

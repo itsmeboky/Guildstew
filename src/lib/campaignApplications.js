@@ -259,7 +259,14 @@ export async function acceptApplication({ application }) {
       campaignId: application.campaign_id,
       submittedBy: playerId,
     }).catch((err) => {
-      if (typeof console !== "undefined") console.warn("materializeJoinBonds failed (non-fatal):", err);
+      // Non-fatal to the accept, but NEVER silent — log with full context so
+      // an RLS denial / missing-deity read announces itself instead of
+      // vanishing (a silent no-op here is why this failed invisibly).
+      console.error(
+        `[materializeJoinBonds] failed for character ${cloneId || application.character_id} ` +
+        `in campaign ${application.campaign_id} (non-fatal — accept proceeded):`,
+        err,
+      );
     });
   }
 }
@@ -337,8 +344,9 @@ export async function cloneCharacterForCampaign({ applicationId, sourceCharacter
 /**
  * On accept, read the joining character's `creator_data` and seed the
  * campaign with PENDING copies of its creator-authored bonds, for the GM
- * to accept/reject in the lobby (DeityApprovalDialog). The GM's auth
- * context runs this, so the `deities` GM-write RLS policy permits the
+ * to accept/reject in the lobby (the Pending Approvals panel in
+ * CampaignView). The GM's auth context runs this, so the `deities` GM-write
+ * RLS policy permits the
  * insert. Idempotent — re-accepting won't duplicate.
  */
 export async function materializeJoinBonds({ characterId, campaignId, submittedBy }) {
@@ -369,16 +377,19 @@ async function materializePlayerDeity({ campaignId, submittedBy, deity }) {
   const name = String(deity.name).trim();
   // Idempotency: skip if this player already submitted a deity by this name
   // to this campaign (the deities table has no unique constraint for it).
-  const { data: existing } = await supabase
+  // Supabase returns { error } rather than throwing on RLS/query failure —
+  // surface it so a denial isn't dropped silently.
+  const { data: existing, error: selErr } = await supabase
     .from("deities")
     .select("id")
     .eq("campaign_id", campaignId)
     .eq("submitted_by", submittedBy)
     .eq("name", name)
     .maybeSingle();
+  if (selErr) throw selErr;
   if (existing?.id) return;
 
-  await supabase.from("deities").insert({
+  const { error: insErr } = await supabase.from("deities").insert({
     campaign_id: campaignId,
     name,
     description: deity.desc || null,
@@ -389,6 +400,9 @@ async function materializePlayerDeity({ campaignId, submittedBy, deity }) {
     created_by: submittedBy || null,
     discovered: true,
   });
+  // An RLS denial / constraint failure was previously swallowed silently —
+  // throw so the caller's catch logs it with context.
+  if (insErr) throw insErr;
 }
 
 export async function rejectCharacter({ application, gmMessage }) {
