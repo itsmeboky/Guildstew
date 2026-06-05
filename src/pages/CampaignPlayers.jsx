@@ -6,6 +6,8 @@ import { ArrowLeft, UserMinus, Gift, Award, Flag } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { canManagePlayers } from "@/components/campaigns/permissions";
+import { isProvableClone } from "@/lib/cloneCharacterRow";
+import { clearKickedApplication } from "@/lib/campaignApplications";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -94,27 +96,55 @@ export default function CampaignPlayers() {
     mutationFn: async (playerId) => {
       const updatedPlayers = campaign.player_ids.filter(id => id !== playerId);
       await base44.entities.Campaign.update(campaignId, { player_ids: updatedPlayers });
-      
-      // Remove character from campaign
-      const playerCharacters = characters.filter(c => {
-        const profile = allUsers.find(u => u.user_id === playerId);
-        return c.created_by === profile?.email && c.campaign_id === campaignId;
-      });
-      
-      // Delete the player's campaign CLONE(s). Each is a campaign-owned copy
-      // (is_campaign_copy) — the GM can delete it via the campaign-GM DELETE
-      // policy; the player's library original (campaign_id null) is never in
-      // this list and stays untouched. Re-adding the player makes a fresh
-      // clone, so no stale campaign state drags back. (Previously this nulled
-      // campaign_id on the library row — which the GM didn't own → 403.)
+
+      const profile = allUsers.find(u => u.user_id === playerId);
+      const playerCharacters = characters.filter(c =>
+        c.created_by === profile?.email && c.campaign_id === campaignId
+      );
+
+      // Only delete PROVABLE campaign clones (is_campaign_copy === true &&
+      // source_character_id != null). A clone is a copy — deleting it can't
+      // destroy the player's only character. Legacy / ambiguous rows
+      // (pre-clone-model: stamped campaign_id, no source link) are the
+      // player's SOLE copy — never delete them, and don't try campaign_id =
+      // null either (the GM UPDATE policy's WITH CHECK requires campaign_id
+      // NOT NULL, so detaching 403s). Leave them in place and flag for an
+      // admin reset. Membership is already removed above regardless.
+      const skippedLegacy = [];
       for (const character of playerCharacters) {
-        await base44.entities.Character.delete(character.id);
+        if (isProvableClone(character)) {
+          await base44.entities.Character.delete(character.id);
+        } else {
+          skippedLegacy.push(character);
+          console.warn(
+            `[kick] Not deleting non-clone character ${character.id} ` +
+            `(is_campaign_copy=${character.is_campaign_copy}, ` +
+            `source_character_id=${character.source_character_id}) for player ` +
+            `${playerId} in campaign ${campaignId} — predates the clone model; ` +
+            `reset from the admin dashboard.`,
+          );
+        }
       }
+
+      // Clear the kicked player's accepted application so its character_id
+      // doesn't dangle at a deleted clone (re-apply starts fresh anyway).
+      await clearKickedApplication({ campaignId, userId: playerId }).catch((err) => {
+        console.warn("[kick] clearKickedApplication failed (non-fatal):", err);
+      });
+
+      return { skippedLegacy };
     },
-    onSuccess: () => {
+    onSuccess: ({ skippedLegacy = [] } = {}) => {
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
-      toast.success('Player removed from campaign');
+      if (skippedLegacy.length > 0) {
+        toast.info(
+          "Player removed. Their character predates the clone model and was left intact — reset it from the admin dashboard.",
+          { duration: 8000 },
+        );
+      } else {
+        toast.success('Player removed from campaign');
+      }
       setShowKickDialog(false);
       setSelectedPlayer(null);
     }

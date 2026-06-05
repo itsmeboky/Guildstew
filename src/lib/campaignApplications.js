@@ -1,5 +1,6 @@
 import { supabase } from "@/api/supabaseClient";
 import { listCampaignBans } from "@/lib/campaignBans";
+import { buildCampaignCloneRow } from "@/lib/cloneCharacterRow";
 
 /**
  * Campaign application + approval pipeline client.
@@ -307,29 +308,13 @@ export async function cloneCharacterForCampaign({ applicationId, sourceCharacter
   let cloneId = existingClone?.id || null;
 
   if (!cloneId) {
-    // Strip identity / session-lock / timestamps so no stale play state
-    // rides into the clone (smell #6 from the ownership-model work). Keep
-    // user_id + created_by so the player's own-character lookup
-    // (created_by + campaign_id) finds the clone.
-    const {
-      id: _id,
-      created_at: _createdAt,
-      updated_at: _updatedAt,
-      last_played: _lastPlayed,
-      active_session_id: _activeSessionId,
-      ...rest
-    } = orig;
-
+    // Row shape from the shared helper (single source of truth with the
+    // lobby path) — strips identity / session-lock / timestamps and keeps
+    // user_id + created_by so the player's own-character lookup finds the
+    // clone. The INSERT runs as the GM (campaign-GM INSERT policy).
     const { data: inserted, error: insErr } = await supabase
       .from("characters")
-      .insert({
-        ...rest,
-        campaign_id: campaignId,
-        is_campaign_copy: true,
-        source_character_id: sourceCharacterId,
-        active_session_id: null,
-        last_played: null,
-      })
+      .insert(buildCampaignCloneRow(orig, { campaignId }))
       .select("id")
       .single();
     if (insErr) throw insErr;
@@ -433,6 +418,25 @@ export async function rejectCharacter({ application, gmMessage }) {
     .eq("id", application.id);
   if (error) throw error;
   return "rejected_character";
+}
+
+/**
+ * On kick, clear the player's ACCEPTED application for this campaign so its
+ * character_id doesn't dangle at the now-deleted clone. Re-applying
+ * (submitApplication) overwrites character_id + resets status to 'pending'
+ * regardless, so this just keeps the interim state clean (the GM's
+ * applications view and the player's inbox won't point at a deleted row).
+ * Run by the GM; non-fatal.
+ */
+export async function clearKickedApplication({ campaignId, userId }) {
+  if (!campaignId || !userId) return;
+  const { error } = await supabase
+    .from("campaign_applications")
+    .update({ character_id: null, updated_at: new Date().toISOString() })
+    .eq("campaign_id", campaignId)
+    .or(`user_id.eq.${userId},applicant_id.eq.${userId}`)
+    .eq("status", "accepted");
+  if (error) throw error;
 }
 
 export async function rejectPlayer({ application, reason = null }) {
