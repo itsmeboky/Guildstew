@@ -101,8 +101,14 @@ export default function CampaignPlayers() {
         return c.created_by === profile?.email && c.campaign_id === campaignId;
       });
       
+      // Delete the player's campaign CLONE(s). Each is a campaign-owned copy
+      // (is_campaign_copy) — the GM can delete it via the campaign-GM DELETE
+      // policy; the player's library original (campaign_id null) is never in
+      // this list and stays untouched. Re-adding the player makes a fresh
+      // clone, so no stale campaign state drags back. (Previously this nulled
+      // campaign_id on the library row — which the GM didn't own → 403.)
       for (const character of playerCharacters) {
-        await base44.entities.Character.update(character.id, { campaign_id: null });
+        await base44.entities.Character.delete(character.id);
       }
     },
     onSuccess: () => {

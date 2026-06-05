@@ -231,28 +231,122 @@ export async function acceptApplication({ application }) {
     .eq("id", application.id);
   if (updErr) throw updErr;
 
-  // Associate the presented character with this campaign so the
-  // standard GM panel sees it in its character list.
+  // Clone the player's LIBRARY character into a campaign-owned copy, rather
+  // than stamping campaign_id onto the library row (which made the campaign
+  // char and the library char the same row — the source of library
+  // contamination during play and the kick-PATCH 403). The clone is what
+  // plays/levels/dies; the library original is left pristine (campaign_id
+  // stays null). Mirrors CharacterPickerView.cloneMutation for the
+  // application path. Non-fatal: must never block the accept itself.
   if (application.character_id) {
-    await supabase
-      .from("characters")
-      .update({ campaign_id: application.campaign_id })
-      .eq("id", application.character_id)
-      .catch(() => { /* non-fatal */ });
+    const cloneId = await cloneCharacterForCampaign({
+      applicationId: application.id,
+      sourceCharacterId: application.character_id,
+      campaignId: application.campaign_id,
+    }).catch((err) => {
+      if (typeof console !== "undefined") console.warn("cloneCharacterForCampaign failed (non-fatal):", err);
+      return null;
+    });
 
     // Materialize the joining character's creator-side bonds into the
     // campaign as PENDING items for the GM to accept/reject in the lobby.
-    // Deity-first; relationships plug into the same path once the Allies &
-    // Enemies tab + relationship_entities table exist (see the seam below).
-    // Non-fatal: a failure here must never block the accept itself.
+    // Reads the CLONE's creator_data (a copy of the original's) — readable
+    // by the GM via the campaign-GM SELECT policy. Deity-first; relationships
+    // plug into the same path once the Allies & Enemies table exists.
     await materializeJoinBonds({
-      characterId: application.character_id,
+      characterId: cloneId || application.character_id,
       campaignId: application.campaign_id,
       submittedBy: playerId,
     }).catch((err) => {
       if (typeof console !== "undefined") console.warn("materializeJoinBonds failed (non-fatal):", err);
     });
   }
+}
+
+/**
+ * Deep-copy a player's library character into a new campaign-owned
+ * `characters` row (the clone that plays in the campaign), and repoint the
+ * application at it. The library original is untouched (campaign_id stays
+ * null). Returns the clone's id.
+ *
+ * Run by the GM (the accept action), so the clone is inserted with the
+ * player's user_id under the campaign-GM INSERT policy (the owner INSERT
+ * policy can't cover a GM inserting on a player's behalf). Idempotent: a
+ * re-accept reuses the existing clone instead of duplicating it.
+ *
+ * Child-table state (PC↔PC character_relationships, the companions table) is
+ * intentionally NOT copied — those are in-campaign play artifacts a fresh
+ * clone correctly starts without. The `creator_data` and `companions` JSONB
+ * (creator-authored) ride along on the row.
+ */
+export async function cloneCharacterForCampaign({ applicationId, sourceCharacterId, campaignId }) {
+  if (!sourceCharacterId || !campaignId) return null;
+
+  const { data: orig, error: readErr } = await supabase
+    .from("characters")
+    .select("*")
+    .eq("id", sourceCharacterId)
+    .maybeSingle();
+  if (readErr) throw readErr;
+  if (!orig) return null;
+
+  // Already a campaign copy for this campaign (re-accept after repoint):
+  // nothing to clone.
+  if (orig.campaign_id === campaignId && orig.is_campaign_copy) {
+    return orig.id;
+  }
+
+  // Idempotency: reuse an existing clone of this original for this campaign.
+  const { data: existingClone } = await supabase
+    .from("characters")
+    .select("id")
+    .eq("campaign_id", campaignId)
+    .eq("source_character_id", sourceCharacterId)
+    .maybeSingle();
+
+  let cloneId = existingClone?.id || null;
+
+  if (!cloneId) {
+    // Strip identity / session-lock / timestamps so no stale play state
+    // rides into the clone (smell #6 from the ownership-model work). Keep
+    // user_id + created_by so the player's own-character lookup
+    // (created_by + campaign_id) finds the clone.
+    const {
+      id: _id,
+      created_at: _createdAt,
+      updated_at: _updatedAt,
+      last_played: _lastPlayed,
+      active_session_id: _activeSessionId,
+      ...rest
+    } = orig;
+
+    const { data: inserted, error: insErr } = await supabase
+      .from("characters")
+      .insert({
+        ...rest,
+        campaign_id: campaignId,
+        is_campaign_copy: true,
+        source_character_id: sourceCharacterId,
+        active_session_id: null,
+        last_played: null,
+      })
+      .select("id")
+      .single();
+    if (insErr) throw insErr;
+    cloneId = inserted.id;
+  }
+
+  // Repoint the application at the clone — post-accept, "the character in
+  // this application" is the campaign instance.
+  if (applicationId) {
+    await supabase
+      .from("campaign_applications")
+      .update({ character_id: cloneId })
+      .eq("id", applicationId)
+      .catch(() => { /* non-fatal */ });
+  }
+
+  return cloneId;
 }
 
 /**
