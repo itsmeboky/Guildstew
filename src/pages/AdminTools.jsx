@@ -1,7 +1,7 @@
 import React from "react";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
-import { Dice5, ArrowLeft } from "lucide-react";
+import { Dice5, ShieldCheck, ArrowLeft } from "lucide-react";
 
 const ADMIN_EMAILS = [
   "harrison@aetherianstudios.com",
@@ -23,6 +23,14 @@ const TOOLS = [
       "Set the resting rotation for each face on every die type. The calibrated face is what the live dice system lands on when a roll resolves.",
     to: "/dice-calibrator",
     icon: Dice5,
+  },
+  {
+    id: "alpha-approvals",
+    title: "Alpha Approvals",
+    description:
+      "Review the hand-vetted alpha queue. Approve, resend keys, revoke, or reject applicants — approving mints a join key and emails it.",
+    to: "/alpha-approvals",
+    icon: ShieldCheck,
   },
 ];
 
