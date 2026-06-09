@@ -57,24 +57,32 @@ function fmtDate(iso) {
 
 // Calls the alpha-admin Edge Function. Token is pulled fresh from the live
 // Supabase session (never a stored value), matching how AuthContext reads auth.
+// supabase.functions.invoke attaches both the live session JWT and the anon
+// apikey header — the gateway wants the latter for JWT verification, before our
+// own is_admin() check runs. (A raw fetch with only Authorization 401s at the
+// gateway.) It also saves a manual getSession() round-trip.
 async function callAlphaAdmin({ action, email, first_name }) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const accessToken = session?.access_token;
-  if (!accessToken) {
-    console.error("alpha-admin call aborted: no access token in session", action, email);
-    throw new Error("Not authenticated");
-  }
-  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/alpha-admin`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({ action, email, first_name }),
+  const { data, error } = await supabase.functions.invoke("alpha-admin", {
+    body: { action, email, first_name },
   });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body.ok) {
-    console.error("alpha-admin call failed", action, email, res.status, body);
-    throw new Error(body?.detail || body?.error || `alpha-admin ${res.status}`);
+  if (error) {
+    // Non-2xx surfaces as FunctionsHttpError; the Response is on error.context,
+    // where our function's { error, detail } body lives.
+    let detail = error.message;
+    try {
+      const body = await error.context?.json?.();
+      if (body) detail = body.detail || body.error || detail;
+    } catch (parseErr) {
+      console.error("alpha-admin: failed to parse error body", parseErr);
+    }
+    console.error("alpha-admin call failed", action, email, detail);
+    throw new Error(detail || "alpha-admin failed");
   }
-  return body; // { ok, action, email, code? }
+  if (!data?.ok) {
+    console.error("alpha-admin returned not-ok", action, email, data);
+    throw new Error(data?.detail || data?.error || "alpha-admin failed");
+  }
+  return data; // { ok, action, email, code? }
 }
 
 export default function AlphaApprovals() {
