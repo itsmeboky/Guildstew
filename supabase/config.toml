@@ -1,0 +1,12 @@
+# Supabase project config.
+# project_id is the linked project ref (see https://supabase.com/dashboard/project/_/settings/general).
+project_id = "ktdxhsstrgwciqkvprph"
+
+# alpha-admin verifies the caller's JWT in-code (auth.getUser + is_admin RPC),
+# so gateway-level JWT verification must be OFF. With it ON (the default),
+# Supabase's gateway 401s the browser's unauthenticated CORS preflight (OPTIONS
+# carries no Authorization header) before our handler runs — surfacing in the
+# browser as "Preflight ... does not have HTTP ok status". Keep this false so
+# every `supabase functions deploy` honors it (no need to remember --no-verify-jwt).
+[functions.alpha-admin]
+verify_jwt = false
