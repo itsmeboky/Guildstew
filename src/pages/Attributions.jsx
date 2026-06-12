@@ -159,6 +159,14 @@ const STYLES = `
 .gs-attr .commbar .lab{font-size:12px;font-weight:700}
 .gs-attr .commbar .lab.open{color:var(--teal)} .gs-attr .commbar .lab.closed{color:#8a7a60}
 
+/* decorative doodle layer — first-party inline SVG, never interactive */
+.gs-attr #gallery-view{position:relative}
+.gs-attr #gallery-view .gal-head,.gs-attr #gallery-view .grid,.gs-attr #gallery-view .state{position:relative;z-index:1}
+.gs-attr .gal-decor{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.gs-attr .gal-decor .doodle{position:absolute}
+.gs-attr .gal-decor .blob{position:absolute;border-radius:50%;filter:blur(64px);opacity:.16}
+.gs-attr .hdr-squiggle{display:block;color:var(--orange);opacity:.6;margin:10px 0 2px}
+@media(max-width:900px){.gs-attr .gal-decor{display:none}}
 .gs-attr .grid{display:grid;grid-template-columns:repeat(6,1fr);grid-auto-flow:dense;grid-auto-rows:150px;gap:8px}
 @media(max-width:900px){.gs-attr .grid{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:560px){.gs-attr .grid{grid-template-columns:repeat(2,1fr)}}
@@ -677,6 +685,46 @@ const SIZE_CLASS = SIZE_PATTERN.map(
   (s) => ({ hero: "piece--hero", wide: "piece--wide", tall: "piece--tall", small: "" }[s])
 );
 
+// First-party decorative doodles for the gallery wall. These are our own
+// static markup (a d20, rune, sparkle, squiggle, plus, dots) plus two
+// blurred colour blobs — not user media — so inlining the SVG is safe;
+// the `<img src>`-only rule for uploaded art does not apply here. Purely
+// presentational: pointer-events:none, low opacity, hidden under 900px.
+function GalleryDecor() {
+  const S = { strokeLinecap: "round", strokeLinejoin: "round", fill: "none", stroke: "currentColor" };
+  return (
+    <div className="gal-decor" aria-hidden="true">
+      <span className="blob" style={{ width: 280, height: 280, top: -50, left: -70, background: "var(--orange)" }} />
+      <span className="blob" style={{ width: 320, height: 320, bottom: 30, right: -90, background: "var(--teal)" }} />
+      {/* d20 */}
+      <svg className="doodle" style={{ top: 96, right: 30, width: 50, color: "var(--teal)", opacity: 0.18 }} viewBox="0 0 100 100" strokeWidth="4" {...S}>
+        <polygon points="50,5 91,29 91,71 50,95 9,71 9,29" />
+        <path d="M50,5 50,38 M9,29 50,38 91,29 M9,71 50,38 91,71 M50,38 50,95" />
+      </svg>
+      {/* rune */}
+      <svg className="doodle" style={{ top: 260, left: 18, width: 38, color: "var(--salmon)", opacity: 0.5 }} viewBox="0 0 60 100" strokeWidth="6" {...S}>
+        <path d="M30,4 30,96 M30,30 54,8 M30,30 6,8 M30,64 52,86" />
+      </svg>
+      {/* sparkle */}
+      <svg className="doodle" style={{ top: 40, left: "42%", width: 30, color: "var(--orange)", opacity: 0.22 }} viewBox="0 0 100 100" strokeWidth="5" {...S}>
+        <path d="M50,6 C54,38 62,46 94,50 C62,54 54,62 50,94 C46,62 38,54 6,50 C38,46 46,38 50,6Z" />
+      </svg>
+      {/* squiggle */}
+      <svg className="doodle" style={{ bottom: 120, left: "30%", width: 110, color: "var(--teal)", opacity: 0.2 }} viewBox="0 0 160 40" strokeWidth="6" {...S}>
+        <path d="M6,20 C26,2 36,2 56,20 C76,38 86,38 106,20 C126,2 136,2 154,20" />
+      </svg>
+      {/* plus */}
+      <svg className="doodle" style={{ top: 420, right: 60, width: 26, color: "var(--navy)", opacity: 0.16 }} viewBox="0 0 40 40" strokeWidth="6" {...S}>
+        <path d="M20,5 20,35 M5,20 35,20" />
+      </svg>
+      {/* dots */}
+      <svg className="doodle" style={{ bottom: 60, left: 40, width: 60, color: "var(--orange)", opacity: 0.2 }} viewBox="0 0 100 30" fill="currentColor">
+        <circle cx="10" cy="15" r="6" /><circle cx="38" cy="15" r="6" /><circle cx="66" cy="15" r="6" /><circle cx="94" cy="15" r="6" />
+      </svg>
+    </div>
+  );
+}
+
 // ═══════════════════════ Gallery view ═══════════════════════════════
 function GalleryView({ artistParam, setParams }) {
   const { user } = useAuth();
@@ -724,10 +772,14 @@ function GalleryView({ artistParam, setParams }) {
 
   return (
     <div className="wrap" id="gallery-view">
+      <GalleryDecor />
       <div className="gal-head">
         <button className="back" onClick={() => setParams({})}><ArrowLeft /> Back to Credits</button>
         <h1>The <span className="hot">Gallery</span> Wall</h1>
         <p>Original work from the Guildstew art kitchen. Leave a note for the artist — if they've left the door open.</p>
+        <svg className="hdr-squiggle" width="180" height="14" viewBox="0 0 180 14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+          <path d="M3,8 C20,1 32,1 48,8 C64,15 76,15 92,8 C108,1 120,1 136,8 C152,15 164,15 177,8" />
+        </svg>
 
         <div className="filters">
           <button className={`fchip ${artistParam === "all" ? "active" : ""}`} onClick={() => setParams({ view: "gallery", artist: "all" })}>All</button>
