@@ -159,10 +159,16 @@ const STYLES = `
 .gs-attr .commbar .lab{font-size:12px;font-weight:700}
 .gs-attr .commbar .lab.open{color:var(--teal)} .gs-attr .commbar .lab.closed{color:#8a7a60}
 
-.gs-attr .grid{columns:3;column-gap:18px}
-@media(max-width:820px){.gs-attr .grid{columns:2}}
-@media(max-width:520px){.gs-attr .grid{columns:1}}
-.gs-attr .piece{break-inside:avoid;margin-bottom:18px;border:2px solid var(--ink);border-radius:14px;overflow:hidden;background:var(--white);box-shadow:5px 5px 0 rgba(27,37,53,.12);cursor:pointer;transition:.18s;display:block;width:100%;padding:0;text-align:left;color:inherit}
+.gs-attr .grid{display:grid;grid-template-columns:repeat(6,1fr);grid-auto-flow:dense;grid-auto-rows:150px;gap:8px}
+@media(max-width:900px){.gs-attr .grid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:560px){.gs-attr .grid{grid-template-columns:repeat(2,1fr)}}
+.gs-attr .piece--hero{grid-column:span 2;grid-row:span 2}
+.gs-attr .piece--wide{grid-column:span 2}
+.gs-attr .piece--tall{grid-row:span 2}
+/* uniform variant — equal square cells, ignoring the span modifiers */
+.gs-attr .grid--uniform{grid-auto-rows:auto}
+.gs-attr .grid--uniform .piece{grid-column:auto!important;grid-row:auto!important;aspect-ratio:1/1}
+.gs-attr .piece{position:relative;border:2px solid var(--ink);border-radius:14px;overflow:hidden;background:var(--white);box-shadow:5px 5px 0 rgba(27,37,53,.12);cursor:pointer;transition:.18s;display:block;width:100%;height:100%;padding:0;text-align:left;color:inherit}
 .gs-attr .piece:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 rgba(4,104,90,.28)}
 .gs-attr .piece .art{position:relative;background:var(--parchment-2)}
 .gs-attr .piece .art img,.gs-attr .piece .art video{width:100%;display:block}
@@ -659,6 +665,15 @@ function MediaCarousel({ piece }) {
   );
 }
 
+// Bento-mosaic tile sizing — a deterministic repeating cadence keyed off
+// the piece's index in the (already sort_order'd) list. No schema field
+// drives this; the same list always packs the same way, and `dense`
+// auto-flow back-fills the gaps the larger tiles leave behind.
+const SIZE_PATTERN = ["hero", "small", "tall", "wide", "small", "tall", "small", "hero", "wide", "small", "tall", "wide", "small"];
+const SIZE_CLASS = SIZE_PATTERN.map(
+  (s) => ({ hero: "piece--hero", wide: "piece--wide", tall: "piece--tall", small: "" }[s])
+);
+
 // ═══════════════════════ Gallery view ═══════════════════════════════
 function GalleryView({ artistParam, setParams }) {
   const { user } = useAuth();
@@ -734,8 +749,8 @@ function GalleryView({ artistParam, setParams }) {
         <EmptyState>No pieces published yet.</EmptyState>
       ) : (
         <div className="grid">
-          {filtered.map((p) => (
-            <button className="piece" key={p.id} onClick={() => setActivePiece(p)}>
+          {filtered.map((p, i) => (
+            <button className={`piece ${SIZE_CLASS[i % SIZE_CLASS.length]}`} key={p.id} onClick={() => setActivePiece(p)}>
               <GalleryCover piece={p} />
               <div className="meta">
                 <div className="pt">{p.title}</div>
