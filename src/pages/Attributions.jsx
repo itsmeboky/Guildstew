@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowLeft, ExternalLink, Image as ImageIcon, Mail, MessageCircle, Send, Trash2,
+  ArrowLeft, ExternalLink, Image as ImageIcon, Mail, Send, Trash2,
   ChevronLeft, ChevronRight, Play, Layers,
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
@@ -168,10 +168,17 @@ const STYLES = `
 /* uniform variant — equal square cells, ignoring the span modifiers */
 .gs-attr .grid--uniform{grid-auto-rows:auto}
 .gs-attr .grid--uniform .piece{grid-column:auto!important;grid-row:auto!important;aspect-ratio:1/1}
-.gs-attr .piece{position:relative;border:2px solid var(--ink);border-radius:14px;overflow:hidden;background:var(--white);box-shadow:5px 5px 0 rgba(27,37,53,.12);cursor:pointer;transition:.18s;display:block;width:100%;height:100%;padding:0;text-align:left;color:inherit}
+.gs-attr .piece{position:relative;border:3px solid var(--frame,var(--orange));border-radius:14px;overflow:hidden;background:var(--white);box-shadow:5px 5px 0 rgba(27,37,53,.12);cursor:pointer;transition:.18s;display:block;width:100%;height:100%;padding:0;text-align:left;color:inherit}
 .gs-attr .piece:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 rgba(4,104,90,.28)}
-.gs-attr .piece .art{position:relative;background:var(--parchment-2)}
-.gs-attr .piece .art img,.gs-attr .piece .art video{width:100%;display:block}
+.gs-attr .piece .art{position:relative;background:var(--parchment-2);width:100%;height:100%}
+.gs-attr .piece .art img,.gs-attr .piece .art video{width:100%;height:100%;object-fit:cover;display:block}
+.gs-attr .piece .art-empty{height:100%}
+/* hover caption — Fraunces title + accent dot + artist name, over a scrim */
+.gs-attr .piece .cap{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;padding:12px 13px;opacity:0;transition:.2s;color:#fff;background:linear-gradient(to top,rgba(27,37,53,.86),rgba(27,37,53,.18) 52%,transparent)}
+.gs-attr .piece:hover .cap,.gs-attr .piece:focus-visible .cap{opacity:1}
+.gs-attr .piece .cap .cap-t{font-family:'Fraunces',serif;font-weight:600;font-size:16px;line-height:1.12}
+.gs-attr .piece .cap .cap-a{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#f4e9d5}
+.gs-attr .piece .cap .cap-a .dot{width:8px;height:8px;border-radius:50%;background:var(--frame,var(--orange));border:1px solid #fff;flex-shrink:0}
 .gs-attr .piece .art .tag{position:absolute;top:10px;right:10px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:rgba(27,37,53,.82);color:#fff;padding:4px 9px;border-radius:99px}
 .gs-attr .art-empty{display:grid;place-items:center;min-height:160px;color:#b7a98f}
 .gs-attr .art-empty.big{min-height:340px;height:100%}
@@ -189,10 +196,6 @@ const STYLES = `
 .gs-attr .modal .art-big .cdots{position:absolute;left:0;right:0;bottom:12px;display:flex;gap:7px;justify-content:center;z-index:2}
 .gs-attr .modal .art-big .cdot{width:9px;height:9px;border-radius:50%;border:2px solid var(--ink);background:var(--white);cursor:pointer;padding:0}
 .gs-attr .modal .art-big .cdot.on{background:var(--orange)}
-.gs-attr .piece .meta{padding:13px 15px}
-.gs-attr .piece .meta .pt{font-family:'Fraunces',serif;font-weight:600;font-size:16px;line-height:1.1}
-.gs-attr .piece .meta .pa{font-size:12.5px;color:#8a7a60;font-weight:600;margin-top:2px}
-.gs-attr .piece .meta .cc{font-size:12px;color:var(--teal);font-weight:700;margin-top:8px;display:flex;align-items:center;gap:5px}
 
 .gs-attr .overlay{position:fixed;inset:0;background:rgba(27,37,53,.72);backdrop-filter:blur(3px);z-index:60;padding:30px;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center}
 .gs-attr .modal{background:var(--parchment);border:3px solid var(--ink);border-radius:20px;width:min(880px,100%);box-shadow:0 24px 0 rgba(0,0,0,.25);overflow:hidden;display:grid;grid-template-columns:1.1fr 1fr;animation:gsrise .35s ease both}
@@ -750,15 +753,18 @@ function GalleryView({ artistParam, setParams }) {
       ) : (
         <div className="grid">
           {filtered.map((p, i) => (
-            <button className={`piece ${SIZE_CLASS[i % SIZE_CLASS.length]}`} key={p.id} onClick={() => setActivePiece(p)}>
+            <button
+              className={`piece ${SIZE_CLASS[i % SIZE_CLASS.length]}`}
+              key={p.id}
+              onClick={() => setActivePiece(p)}
+              style={{ "--frame": p.artist?.avatar_color_1 || "var(--orange)" }}
+            >
               <GalleryCover piece={p} />
-              <div className="meta">
-                <div className="pt">{p.title}</div>
-                {p.artist?.name && <div className="pa">{p.artist.name}</div>}
-                <div className="cc">
-                  <MessageCircle style={{ width: 13, height: 13 }} />
-                  {p.comments_enabled ? "Open for notes" : "Comments closed"}
-                </div>
+              <div className="cap">
+                <div className="cap-t">{p.title}</div>
+                {p.artist?.name && (
+                  <div className="cap-a"><span className="dot" />{p.artist.name}</div>
+                )}
               </div>
             </button>
           ))}
