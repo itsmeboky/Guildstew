@@ -142,7 +142,7 @@ const STYLES = `
 .gs-attr .fchip{cursor:pointer;border:2px solid var(--ink);background:var(--white);font-weight:700;font-size:13px;padding:8px 16px;border-radius:99px;transition:.15s;color:inherit}
 .gs-attr .fchip.active{background:var(--orange);color:#fff}
 
-.gs-attr .artist-banner{display:flex;gap:18px;align-items:center;background:var(--white);border:2px solid var(--ink);border-radius:16px;padding:18px 20px;box-shadow:5px 5px 0 rgba(27,37,53,.12);margin-bottom:26px;flex-wrap:wrap}
+.gs-attr .artist-banner{display:flex;gap:18px;align-items:center;background:var(--white);border:2px solid var(--ink);border-left:7px solid var(--frame,var(--orange));border-radius:16px;padding:18px 20px;box-shadow:5px 5px 0 rgba(27,37,53,.12);margin-bottom:26px;flex-wrap:wrap}
 .gs-attr .artist-banner .ava{width:62px;height:62px;border-radius:14px;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;font-size:26px;color:#fff;border:2px solid var(--ink);flex-shrink:0;overflow:hidden}
 .gs-attr .artist-banner .who{flex:1;min-width:170px}
 .gs-attr .artist-banner .who .n{font-family:'Fraunces',serif;font-weight:600;font-size:22px;line-height:1;cursor:pointer;background:none;border:0;padding:0;color:inherit}
@@ -208,11 +208,12 @@ const STYLES = `
 .gs-attr .overlay{position:fixed;inset:0;background:rgba(27,37,53,.72);backdrop-filter:blur(3px);z-index:60;padding:30px;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center}
 .gs-attr .modal{background:var(--parchment);border:3px solid var(--ink);border-radius:20px;width:min(880px,100%);box-shadow:0 24px 0 rgba(0,0,0,.25);overflow:hidden;display:grid;grid-template-columns:1.1fr 1fr;animation:gsrise .35s ease both}
 @media(max-width:740px){.gs-attr .modal{grid-template-columns:1fr}}
-.gs-attr .modal .art-big{min-height:340px;position:relative;background:var(--parchment-2)}
+.gs-attr .modal .art-big{min-height:340px;position:relative;background:var(--parchment-2);border:4px solid var(--frame,var(--orange))}
 .gs-attr .modal .art-big img{width:100%;height:100%;object-fit:cover;display:block}
 .gs-attr .modal .art-big .x{position:absolute;top:12px;left:12px;width:34px;height:34px;border-radius:50%;border:2px solid var(--ink);background:var(--white);cursor:pointer;font-size:18px;line-height:1;display:grid;place-items:center;color:inherit}
 .gs-attr .modal .side{padding:24px;display:flex;flex-direction:column;max-height:78vh}
 .gs-attr .modal .side h3{font-family:'Fraunces',serif;font-weight:900;font-size:26px;line-height:1}
+.gs-attr .modal .side h3::after{content:"";display:block;width:42px;height:4px;border-radius:99px;background:var(--frame,var(--orange));margin-top:10px}
 .gs-attr .modal .side .by{font-weight:700;color:var(--teal);font-size:13.5px;margin:6px 0 12px}
 .gs-attr .modal .side .desc{font-size:14px;color:#5c4f3a;line-height:1.55;font-weight:500;margin-bottom:14px}
 .gs-attr .artist-strip{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ink);color:#fff;border-radius:12px;padding:10px 14px;margin-bottom:16px}
@@ -837,7 +838,7 @@ function GalleryView({ artistParam, setParams }) {
 
 function ArtistBanner({ artist, canManage, onToggleCommissions, onOpenProfile }) {
   return (
-    <div className="artist-banner">
+    <div className="artist-banner" style={{ "--frame": artist?.avatar_color_1 || "var(--orange)" }}>
       <div className="ava" style={{ background: monoGrad(artist) }}><AvatarFill member={artist} /></div>
       <div className="who">
         <button className="n" onClick={onOpenProfile}>{artist.name}</button>
@@ -924,7 +925,7 @@ function PieceModal({ piece, onClose, canManage, onToggleComments }) {
 
   return (
     <div className="overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal">
+      <div className="modal" style={{ "--frame": piece.artist?.avatar_color_1 || "var(--orange)" }}>
         <div className="art-big">
           <MediaCarousel piece={piece} />
           <button className="x" onClick={onClose}>×</button>
