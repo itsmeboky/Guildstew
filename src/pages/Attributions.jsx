@@ -141,6 +141,10 @@ const STYLES = `
 .gs-attr .filters{display:flex;flex-wrap:wrap;gap:9px;margin:24px 0 26px}
 .gs-attr .fchip{cursor:pointer;border:2px solid var(--ink);background:var(--white);font-weight:700;font-size:13px;padding:8px 16px;border-radius:99px;transition:.15s;color:inherit}
 .gs-attr .fchip.active{background:var(--orange);color:#fff}
+.gs-attr .viewtoggle{margin-left:auto;display:inline-flex;align-self:center;border:2px solid var(--ink);border-radius:99px;overflow:hidden;background:var(--white);box-shadow:3px 3px 0 rgba(27,37,53,.1)}
+.gs-attr .viewtoggle .vt{appearance:none;border:0;cursor:pointer;background:transparent;color:inherit;font-weight:700;font-size:13px;padding:8px 16px;transition:.15s}
+.gs-attr .viewtoggle .vt:hover{color:var(--orange)}
+.gs-attr .viewtoggle .vt.active{background:var(--orange);color:#fff}
 
 .gs-attr .artist-banner{display:flex;gap:18px;align-items:center;background:var(--white);border:2px solid var(--ink);border-left:7px solid var(--frame,var(--orange));border-radius:16px;padding:18px 20px;box-shadow:5px 5px 0 rgba(27,37,53,.12);margin-bottom:26px;flex-wrap:wrap}
 .gs-attr .artist-banner .ava{width:62px;height:62px;border-radius:14px;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;font-size:26px;color:#fff;border:2px solid var(--ink);flex-shrink:0;overflow:hidden}
@@ -733,6 +737,8 @@ function GalleryView({ artistParam, setParams }) {
   const pieces = useGalleryPieces();
   const members = useMembers();
   const [activePiece, setActivePiece] = useState(null);
+  // Display preference only — does not touch the query or the URL filter.
+  const [layout, setLayout] = useState("mosaic");
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["galleryPieces"] });
@@ -789,6 +795,10 @@ function GalleryView({ artistParam, setParams }) {
               {a.name}
             </button>
           ))}
+          <div className="viewtoggle" role="group" aria-label="Wall layout">
+            <button className={`vt ${layout === "mosaic" ? "active" : ""}`} onClick={() => setLayout("mosaic")}>Mosaic</button>
+            <button className={`vt ${layout === "uniform" ? "active" : ""}`} onClick={() => setLayout("uniform")}>Uniform</button>
+          </div>
         </div>
 
         {focusedArtist && (
@@ -804,7 +814,7 @@ function GalleryView({ artistParam, setParams }) {
       {!filtered.length ? (
         <EmptyState>No pieces published yet.</EmptyState>
       ) : (
-        <div className="grid">
+        <div className={`grid ${layout === "uniform" ? "grid--uniform" : ""}`}>
           {filtered.map((p, i) => (
             <button
               className={`piece ${SIZE_CLASS[i % SIZE_CLASS.length]}`}
