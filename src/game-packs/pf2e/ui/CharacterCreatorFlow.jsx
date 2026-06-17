@@ -7,7 +7,7 @@
 // haven't been merged into tailwind.config.js yet. Once they're merged, this
 // block can be deleted.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Hexagon } from 'lucide-react';
 
 import StepIdentity from './steps/StepIdentity.jsx';
@@ -26,7 +26,7 @@ import DeityModal from './components/DeityModal.jsx';
 
 import { STEPS } from '../config/steps.js';
 
-export default function CharacterCreatorFlow({ onComplete }) {
+export default function CharacterCreatorFlow({ onComplete, initialCharacter = null }) {
   const [step, setStep] = useState(0);
   const [completed, setCompleted] = useState([]);
   const [deityModalOpen, setDeityModalOpen] = useState(false);
@@ -58,6 +58,31 @@ export default function CharacterCreatorFlow({ onComplete }) {
   });
 
   const update = (patch) => setData(d => ({ ...d, ...patch }));
+
+  // Edit mode hydration. The save transform in PathfinderCharacterCreator
+  // stores the entire form `data` blob verbatim under system_data (with
+  // name/level duplicated out to flat columns), so the inverse is simply to
+  // spread system_data back over the defaults. Spreading over (not replacing)
+  // the default shape keeps any newer fields the saved row predates intact.
+  // Falls back to the flat name/level columns if system_data is absent
+  // (e.g. a legacy row written before system_data existed). Runs once —
+  // guarded by a ref so later re-renders can't wipe in-progress edits.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current || !initialCharacter) return;
+    hydratedRef.current = true;
+    const saved = initialCharacter.system_data || {};
+    setData(d => ({
+      ...d,
+      ...saved,
+      name: saved.name ?? initialCharacter.name ?? d.name,
+      level: saved.level ?? initialCharacter.level ?? d.level,
+    }));
+    // Unlock every step for editing — StepIndicator gates clickability on
+    // max(current, ...completed), so marking all steps complete lets the
+    // user jump freely between them instead of re-walking the flow in order.
+    setCompleted(STEPS.map((_, i) => i));
+  }, [initialCharacter]);
 
   const next = () => {
     setCompleted(prev => prev.includes(step) ? prev : [...prev, step]);
