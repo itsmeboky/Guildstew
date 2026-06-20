@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowLeft, ExternalLink, Image as ImageIcon, Mail, MessageCircle, Send, Trash2,
+  ArrowLeft, ExternalLink, Image as ImageIcon, Mail, Send, Trash2,
   ChevronLeft, ChevronRight, Play, Layers,
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
@@ -141,8 +141,12 @@ const STYLES = `
 .gs-attr .filters{display:flex;flex-wrap:wrap;gap:9px;margin:24px 0 26px}
 .gs-attr .fchip{cursor:pointer;border:2px solid var(--ink);background:var(--white);font-weight:700;font-size:13px;padding:8px 16px;border-radius:99px;transition:.15s;color:inherit}
 .gs-attr .fchip.active{background:var(--orange);color:#fff}
+.gs-attr .viewtoggle{margin-left:auto;display:inline-flex;align-self:center;border:2px solid var(--ink);border-radius:99px;overflow:hidden;background:var(--white);box-shadow:3px 3px 0 rgba(27,37,53,.1)}
+.gs-attr .viewtoggle .vt{appearance:none;border:0;cursor:pointer;background:transparent;color:inherit;font-weight:700;font-size:13px;padding:8px 16px;transition:.15s}
+.gs-attr .viewtoggle .vt:hover{color:var(--orange)}
+.gs-attr .viewtoggle .vt.active{background:var(--orange);color:#fff}
 
-.gs-attr .artist-banner{display:flex;gap:18px;align-items:center;background:var(--white);border:2px solid var(--ink);border-radius:16px;padding:18px 20px;box-shadow:5px 5px 0 rgba(27,37,53,.12);margin-bottom:26px;flex-wrap:wrap}
+.gs-attr .artist-banner{display:flex;gap:18px;align-items:center;background:var(--white);border:2px solid var(--ink);border-left:7px solid var(--frame,var(--orange));border-radius:16px;padding:18px 20px;box-shadow:5px 5px 0 rgba(27,37,53,.12);margin-bottom:26px;flex-wrap:wrap}
 .gs-attr .artist-banner .ava{width:62px;height:62px;border-radius:14px;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;font-size:26px;color:#fff;border:2px solid var(--ink);flex-shrink:0;overflow:hidden}
 .gs-attr .artist-banner .who{flex:1;min-width:170px}
 .gs-attr .artist-banner .who .n{font-family:'Fraunces',serif;font-weight:600;font-size:22px;line-height:1;cursor:pointer;background:none;border:0;padding:0;color:inherit}
@@ -159,13 +163,34 @@ const STYLES = `
 .gs-attr .commbar .lab{font-size:12px;font-weight:700}
 .gs-attr .commbar .lab.open{color:var(--teal)} .gs-attr .commbar .lab.closed{color:#8a7a60}
 
-.gs-attr .grid{columns:3;column-gap:18px}
-@media(max-width:820px){.gs-attr .grid{columns:2}}
-@media(max-width:520px){.gs-attr .grid{columns:1}}
-.gs-attr .piece{break-inside:avoid;margin-bottom:18px;border:2px solid var(--ink);border-radius:14px;overflow:hidden;background:var(--white);box-shadow:5px 5px 0 rgba(27,37,53,.12);cursor:pointer;transition:.18s;display:block;width:100%;padding:0;text-align:left;color:inherit}
+/* decorative doodle layer — first-party inline SVG, never interactive */
+.gs-attr #gallery-view{position:relative}
+.gs-attr #gallery-view .gal-head,.gs-attr #gallery-view .grid,.gs-attr #gallery-view .state{position:relative;z-index:1}
+.gs-attr .gal-decor{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.gs-attr .gal-decor .doodle{position:absolute}
+.gs-attr .gal-decor .blob{position:absolute;border-radius:50%;filter:blur(64px);opacity:.16}
+.gs-attr .hdr-squiggle{display:block;color:var(--orange);opacity:.6;margin:10px 0 2px}
+@media(max-width:900px){.gs-attr .gal-decor{display:none}}
+.gs-attr .grid{display:grid;grid-template-columns:repeat(6,1fr);grid-auto-flow:dense;grid-auto-rows:150px;gap:8px}
+@media(max-width:900px){.gs-attr .grid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:560px){.gs-attr .grid{grid-template-columns:repeat(2,1fr)}}
+.gs-attr .piece--hero{grid-column:span 2;grid-row:span 2}
+.gs-attr .piece--wide{grid-column:span 2}
+.gs-attr .piece--tall{grid-row:span 2}
+/* uniform variant — equal square cells, ignoring the span modifiers */
+.gs-attr .grid--uniform{grid-auto-rows:auto}
+.gs-attr .grid--uniform .piece{grid-column:auto!important;grid-row:auto!important;aspect-ratio:1/1}
+.gs-attr .piece{position:relative;border:3px solid var(--frame,var(--orange));border-radius:14px;overflow:hidden;background:var(--white);box-shadow:5px 5px 0 rgba(27,37,53,.12);cursor:pointer;transition:.18s;display:block;width:100%;height:100%;padding:0;text-align:left;color:inherit}
 .gs-attr .piece:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 rgba(4,104,90,.28)}
-.gs-attr .piece .art{position:relative;background:var(--parchment-2)}
-.gs-attr .piece .art img,.gs-attr .piece .art video{width:100%;display:block}
+.gs-attr .piece .art{position:relative;background:var(--parchment-2);width:100%;height:100%}
+.gs-attr .piece .art img,.gs-attr .piece .art video{width:100%;height:100%;object-fit:cover;display:block}
+.gs-attr .piece .art-empty{height:100%}
+/* hover caption — Fraunces title + accent dot + artist name, over a scrim */
+.gs-attr .piece .cap{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;padding:12px 13px;opacity:0;transition:.2s;color:#fff;background:linear-gradient(to top,rgba(27,37,53,.86),rgba(27,37,53,.18) 52%,transparent)}
+.gs-attr .piece:hover .cap,.gs-attr .piece:focus-visible .cap{opacity:1}
+.gs-attr .piece .cap .cap-t{font-family:'Fraunces',serif;font-weight:600;font-size:16px;line-height:1.12}
+.gs-attr .piece .cap .cap-a{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#f4e9d5}
+.gs-attr .piece .cap .cap-a .dot{width:8px;height:8px;border-radius:50%;background:var(--frame,var(--orange));border:1px solid #fff;flex-shrink:0}
 .gs-attr .piece .art .tag{position:absolute;top:10px;right:10px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:rgba(27,37,53,.82);color:#fff;padding:4px 9px;border-radius:99px}
 .gs-attr .art-empty{display:grid;place-items:center;min-height:160px;color:#b7a98f}
 .gs-attr .art-empty.big{min-height:340px;height:100%}
@@ -183,19 +208,16 @@ const STYLES = `
 .gs-attr .modal .art-big .cdots{position:absolute;left:0;right:0;bottom:12px;display:flex;gap:7px;justify-content:center;z-index:2}
 .gs-attr .modal .art-big .cdot{width:9px;height:9px;border-radius:50%;border:2px solid var(--ink);background:var(--white);cursor:pointer;padding:0}
 .gs-attr .modal .art-big .cdot.on{background:var(--orange)}
-.gs-attr .piece .meta{padding:13px 15px}
-.gs-attr .piece .meta .pt{font-family:'Fraunces',serif;font-weight:600;font-size:16px;line-height:1.1}
-.gs-attr .piece .meta .pa{font-size:12.5px;color:#8a7a60;font-weight:600;margin-top:2px}
-.gs-attr .piece .meta .cc{font-size:12px;color:var(--teal);font-weight:700;margin-top:8px;display:flex;align-items:center;gap:5px}
 
 .gs-attr .overlay{position:fixed;inset:0;background:rgba(27,37,53,.72);backdrop-filter:blur(3px);z-index:60;padding:30px;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center}
 .gs-attr .modal{background:var(--parchment);border:3px solid var(--ink);border-radius:20px;width:min(880px,100%);box-shadow:0 24px 0 rgba(0,0,0,.25);overflow:hidden;display:grid;grid-template-columns:1.1fr 1fr;animation:gsrise .35s ease both}
 @media(max-width:740px){.gs-attr .modal{grid-template-columns:1fr}}
-.gs-attr .modal .art-big{min-height:340px;position:relative;background:var(--parchment-2)}
+.gs-attr .modal .art-big{min-height:340px;position:relative;background:var(--parchment-2);border:4px solid var(--frame,var(--orange))}
 .gs-attr .modal .art-big img{width:100%;height:100%;object-fit:cover;display:block}
 .gs-attr .modal .art-big .x{position:absolute;top:12px;left:12px;width:34px;height:34px;border-radius:50%;border:2px solid var(--ink);background:var(--white);cursor:pointer;font-size:18px;line-height:1;display:grid;place-items:center;color:inherit}
 .gs-attr .modal .side{padding:24px;display:flex;flex-direction:column;max-height:78vh}
 .gs-attr .modal .side h3{font-family:'Fraunces',serif;font-weight:900;font-size:26px;line-height:1}
+.gs-attr .modal .side h3::after{content:"";display:block;width:42px;height:4px;border-radius:99px;background:var(--frame,var(--orange));margin-top:10px}
 .gs-attr .modal .side .by{font-weight:700;color:var(--teal);font-size:13.5px;margin:6px 0 12px}
 .gs-attr .modal .side .desc{font-size:14px;color:#5c4f3a;line-height:1.55;font-weight:500;margin-bottom:14px}
 .gs-attr .artist-strip{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ink);color:#fff;border-radius:12px;padding:10px 14px;margin-bottom:16px}
@@ -659,6 +681,55 @@ function MediaCarousel({ piece }) {
   );
 }
 
+// Bento-mosaic tile sizing — a deterministic repeating cadence keyed off
+// the piece's index in the (already sort_order'd) list. No schema field
+// drives this; the same list always packs the same way, and `dense`
+// auto-flow back-fills the gaps the larger tiles leave behind.
+const SIZE_PATTERN = ["hero", "small", "tall", "wide", "small", "tall", "small", "hero", "wide", "small", "tall", "wide", "small"];
+const SIZE_CLASS = SIZE_PATTERN.map(
+  (s) => ({ hero: "piece--hero", wide: "piece--wide", tall: "piece--tall", small: "" }[s])
+);
+
+// First-party decorative doodles for the gallery wall. These are our own
+// static markup (a d20, rune, sparkle, squiggle, plus, dots) plus two
+// blurred colour blobs — not user media — so inlining the SVG is safe;
+// the `<img src>`-only rule for uploaded art does not apply here. Purely
+// presentational: pointer-events:none, low opacity, hidden under 900px.
+function GalleryDecor() {
+  const S = { strokeLinecap: "round", strokeLinejoin: "round", fill: "none", stroke: "currentColor" };
+  return (
+    <div className="gal-decor" aria-hidden="true">
+      <span className="blob" style={{ width: 280, height: 280, top: -50, left: -70, background: "var(--orange)" }} />
+      <span className="blob" style={{ width: 320, height: 320, bottom: 30, right: -90, background: "var(--teal)" }} />
+      {/* d20 */}
+      <svg className="doodle" style={{ top: 96, right: 30, width: 50, color: "var(--teal)", opacity: 0.18 }} viewBox="0 0 100 100" strokeWidth="4" {...S}>
+        <polygon points="50,5 91,29 91,71 50,95 9,71 9,29" />
+        <path d="M50,5 50,38 M9,29 50,38 91,29 M9,71 50,38 91,71 M50,38 50,95" />
+      </svg>
+      {/* rune */}
+      <svg className="doodle" style={{ top: 260, left: 18, width: 38, color: "var(--salmon)", opacity: 0.5 }} viewBox="0 0 60 100" strokeWidth="6" {...S}>
+        <path d="M30,4 30,96 M30,30 54,8 M30,30 6,8 M30,64 52,86" />
+      </svg>
+      {/* sparkle */}
+      <svg className="doodle" style={{ top: 40, left: "42%", width: 30, color: "var(--orange)", opacity: 0.22 }} viewBox="0 0 100 100" strokeWidth="5" {...S}>
+        <path d="M50,6 C54,38 62,46 94,50 C62,54 54,62 50,94 C46,62 38,54 6,50 C38,46 46,38 50,6Z" />
+      </svg>
+      {/* squiggle */}
+      <svg className="doodle" style={{ bottom: 120, left: "30%", width: 110, color: "var(--teal)", opacity: 0.2 }} viewBox="0 0 160 40" strokeWidth="6" {...S}>
+        <path d="M6,20 C26,2 36,2 56,20 C76,38 86,38 106,20 C126,2 136,2 154,20" />
+      </svg>
+      {/* plus */}
+      <svg className="doodle" style={{ top: 420, right: 60, width: 26, color: "var(--navy)", opacity: 0.16 }} viewBox="0 0 40 40" strokeWidth="6" {...S}>
+        <path d="M20,5 20,35 M5,20 35,20" />
+      </svg>
+      {/* dots */}
+      <svg className="doodle" style={{ bottom: 60, left: 40, width: 60, color: "var(--orange)", opacity: 0.2 }} viewBox="0 0 100 30" fill="currentColor">
+        <circle cx="10" cy="15" r="6" /><circle cx="38" cy="15" r="6" /><circle cx="66" cy="15" r="6" /><circle cx="94" cy="15" r="6" />
+      </svg>
+    </div>
+  );
+}
+
 // ═══════════════════════ Gallery view ═══════════════════════════════
 function GalleryView({ artistParam, setParams }) {
   const { user } = useAuth();
@@ -666,6 +737,8 @@ function GalleryView({ artistParam, setParams }) {
   const pieces = useGalleryPieces();
   const members = useMembers();
   const [activePiece, setActivePiece] = useState(null);
+  // Display preference only — does not touch the query or the URL filter.
+  const [layout, setLayout] = useState("mosaic");
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["galleryPieces"] });
@@ -706,10 +779,14 @@ function GalleryView({ artistParam, setParams }) {
 
   return (
     <div className="wrap" id="gallery-view">
+      <GalleryDecor />
       <div className="gal-head">
         <button className="back" onClick={() => setParams({})}><ArrowLeft /> Back to Credits</button>
         <h1>The <span className="hot">Gallery</span> Wall</h1>
         <p>Original work from the Guildstew art kitchen. Leave a note for the artist — if they've left the door open.</p>
+        <svg className="hdr-squiggle" width="180" height="14" viewBox="0 0 180 14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+          <path d="M3,8 C20,1 32,1 48,8 C64,15 76,15 92,8 C108,1 120,1 136,8 C152,15 164,15 177,8" />
+        </svg>
 
         <div className="filters">
           <button className={`fchip ${artistParam === "all" ? "active" : ""}`} onClick={() => setParams({ view: "gallery", artist: "all" })}>All</button>
@@ -718,6 +795,10 @@ function GalleryView({ artistParam, setParams }) {
               {a.name}
             </button>
           ))}
+          <div className="viewtoggle" role="group" aria-label="Wall layout">
+            <button className={`vt ${layout === "mosaic" ? "active" : ""}`} onClick={() => setLayout("mosaic")}>Mosaic</button>
+            <button className={`vt ${layout === "uniform" ? "active" : ""}`} onClick={() => setLayout("uniform")}>Uniform</button>
+          </div>
         </div>
 
         {focusedArtist && (
@@ -733,17 +814,20 @@ function GalleryView({ artistParam, setParams }) {
       {!filtered.length ? (
         <EmptyState>No pieces published yet.</EmptyState>
       ) : (
-        <div className="grid">
-          {filtered.map((p) => (
-            <button className="piece" key={p.id} onClick={() => setActivePiece(p)}>
+        <div className={`grid ${layout === "uniform" ? "grid--uniform" : ""}`}>
+          {filtered.map((p, i) => (
+            <button
+              className={`piece ${SIZE_CLASS[i % SIZE_CLASS.length]}`}
+              key={p.id}
+              onClick={() => setActivePiece(p)}
+              style={{ "--frame": p.artist?.avatar_color_1 || "var(--orange)" }}
+            >
               <GalleryCover piece={p} />
-              <div className="meta">
-                <div className="pt">{p.title}</div>
-                {p.artist?.name && <div className="pa">{p.artist.name}</div>}
-                <div className="cc">
-                  <MessageCircle style={{ width: 13, height: 13 }} />
-                  {p.comments_enabled ? "Open for notes" : "Comments closed"}
-                </div>
+              <div className="cap">
+                <div className="cap-t">{p.title}</div>
+                {p.artist?.name && (
+                  <div className="cap-a"><span className="dot" />{p.artist.name}</div>
+                )}
               </div>
             </button>
           ))}
@@ -764,7 +848,7 @@ function GalleryView({ artistParam, setParams }) {
 
 function ArtistBanner({ artist, canManage, onToggleCommissions, onOpenProfile }) {
   return (
-    <div className="artist-banner">
+    <div className="artist-banner" style={{ "--frame": artist?.avatar_color_1 || "var(--orange)" }}>
       <div className="ava" style={{ background: monoGrad(artist) }}><AvatarFill member={artist} /></div>
       <div className="who">
         <button className="n" onClick={onOpenProfile}>{artist.name}</button>
@@ -851,7 +935,7 @@ function PieceModal({ piece, onClose, canManage, onToggleComments }) {
 
   return (
     <div className="overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal">
+      <div className="modal" style={{ "--frame": piece.artist?.avatar_color_1 || "var(--orange)" }}>
         <div className="art-big">
           <MediaCarousel piece={piece} />
           <button className="x" onClick={onClose}>×</button>

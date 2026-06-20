@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { supabase } from "@/api/supabaseClient";
 import { loadCampaignBans, findCharacterIncompatibilities } from "@/lib/campaignBans";
+import { buildCampaignCloneRow } from "@/lib/cloneCharacterRow";
 import LazyImage from "@/components/ui/LazyImage";
 
 /**
@@ -157,30 +158,16 @@ function LibraryPickerSection({ campaignId, campaign, user, onBack }) {
     });
   }, [libraryChars, campaignMods, campaign]);
 
-  // Clone-on-attach. Strip identity + session-lock + last_played
-  // explicitly — smell #6 from #10a. Spreading ...rest without
-  // these would carry stale state into the clone.
+  // Clone-on-attach. Row shape comes from the shared helper
+  // (buildCampaignCloneRow) so the lobby and application-accept paths can't
+  // drift — it strips identity / session-lock / last_played so stale state
+  // can't ride into the clone. The INSERT stays here (player auth → owner
+  // INSERT policy).
   const cloneMutation = useMutation({
     mutationFn: async (libraryChar) => {
-      const {
-        id: _id,
-        created_at: _createdAt,
-        updated_at: _updatedAt,
-        last_played: _lastPlayed,
-        active_session_id: _activeSessionId,
-        ...rest
-      } = libraryChar;
-
-      const cloneFields = {
-        ...rest,
-        campaign_id: campaignId,
-        is_campaign_copy: true,
-        source_character_id: libraryChar.id,
-        active_session_id: null,
-        last_played: null,
-      };
-
-      return base44.entities.Character.create(cloneFields);
+      return base44.entities.Character.create(
+        buildCampaignCloneRow(libraryChar, { campaignId }),
+      );
     },
     onSuccess: () => {
       toast.success("Character attached to campaign.");

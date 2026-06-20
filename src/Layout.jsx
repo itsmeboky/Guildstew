@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Play, Users, Trophy, PieChart, Settings, Beer, LogOut, Plus, Radio, UserPlus, Search, ChevronDown, ChevronRight, CreditCard, Palette, MessageSquare, FileText, HelpCircle, Upload, ShoppingBag, DollarSign, AlertCircle, BookOpen, Menu, Sparkles, Globe, UsersIcon, Clock, Scroll, Wand2, Wrench, Church, Skull, Flower2, Crown, Shield, Calendar as CalendarIcon, Layers, NotebookPen } from "lucide-react";
+import { Play, Users, Trophy, PieChart, Settings, Beer, LogOut, Plus, Radio, UserPlus, Search, ChevronDown, ChevronRight, CreditCard, Palette, MessageSquare, FileText, HelpCircle, Upload, ShoppingBag, DollarSign, AlertCircle, BookOpen, Menu, Sparkles, Globe, UsersIcon, Clock, Scroll, Wand2, Wrench, Church, Skull, Flower2, Crown, Shield, Calendar as CalendarIcon, Layers, NotebookPen, Inbox } from "lucide-react";
 // Spice balance lives exclusively in the sidebar now — the nav-bar
 // pill was a duplicate.
 import AppSidebar from "@/components/layout/AppSidebar";
@@ -9,6 +9,7 @@ import ChatPanel from "@/components/chat/ChatPanel";
 import SessionReminderNotification from "@/components/notifications/SessionReminderNotification";
 import DiceRoller, { preloadDiceModels } from "@/components/dice/DiceRoller";
 import { base44 } from "@/api/base44Client";
+import { usePendingApprovals } from "@/components/gm/PendingApprovalsPanel";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { useMyPresence } from "@/lib/PresenceContext";
@@ -156,7 +157,7 @@ export default function Layout({ children, currentPageName }) {
     enabled: !!user,
     staleTime: 5000,
     refetchInterval: 5000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
     initialData: []
   });
 
@@ -332,6 +333,10 @@ export default function Layout({ children, currentPageName }) {
 
   const isGM = user?.id === currentCampaign?.game_master_id || currentCampaign?.co_dm_ids?.includes(user?.id);
 
+  // Count for the "Pending Approvals" GM nav badge (player-submitted content,
+  // deity the only wired type). Query is gated on GM + campaign.
+  const { count: pendingApprovalsCount } = usePendingApprovals(campaignId, isGM && !!currentCampaign);
+
   const playSidebarItems = [
     { name: "Create New", icon: Plus, path: createPageUrl("CreateCampaign") },
     { name: "Watch Live", icon: Radio, path: createPageUrl("WatchLive"), hasIndicator: true },
@@ -350,6 +355,9 @@ export default function Layout({ children, currentPageName }) {
     // Achievements never belonged here — those are main-nav items.
     const items = [
       { name: "Player Management", icon: Users, path: createPageUrl("CampaignPlayers") + `?id=${campaignId}` },
+      // Always present (like the other items); the badge is the only
+      // conditional part (shown when something is pending).
+      { name: "Pending Approvals", icon: Inbox, path: createPageUrl("PendingApprovals") + `?id=${campaignId}`, badge: pendingApprovalsCount },
       { name: "Campaign Updates", icon: FileText, path: createPageUrl("CampaignUpdates") + `?id=${campaignId}` },
       { name: "Campaign Archives", icon: FileText, path: createPageUrl("CampaignArchives") + `?id=${campaignId}` },
       { name: "Campaign Statistics", icon: PieChart, path: createPageUrl("CampaignStatistics") + `?id=${campaignId}` },
@@ -360,7 +368,7 @@ export default function Layout({ children, currentPageName }) {
     }
 
     return items;
-  }, [currentCampaign, campaignId]);
+  }, [currentCampaign, campaignId, isGM, pendingApprovalsCount]);
 
   const campaignPlayerSidebarSections = [
     {

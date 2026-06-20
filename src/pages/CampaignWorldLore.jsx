@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Map as MapIcon, Swords, Church, ScrollText, Gem, MessageSquare, Castle, Crown, Home } from "lucide-react";
@@ -12,6 +12,7 @@ import RecentActivity from "@/components/worldLore/RecentActivity";
 import RumorBoardView from "@/components/worldLore/RumorBoardView";
 import LegendTrackerView from "@/components/worldLore/LegendTrackerView";
 import GuildHallPanel from "@/components/worldLore/GuildHallPanel";
+import DeitiesPanel from "@/components/worldLore/DeitiesPanel";
 import { stripHtml } from "@/utils/worldLoreVisibility";
 import { ensureCipherMapsForCampaign, hasCompleteCipherMaps } from "@/utils/languageCipherMaps";
 
@@ -270,7 +271,9 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
         )}
         {category === "regions"    && entryView("regions")}
         {category === "political"  && entryView("political")}
-        {category === "religions"  && entryView("religions")}
+        {category === "religions"  && (
+          <DeitiesPanel campaignId={campaignId} isGM={isGM} user={user} />
+        )}
         {category === "history"    && entryView("history")}
         {category === "artifacts"  && entryView("artifacts")}
         {category === "rumors" && (

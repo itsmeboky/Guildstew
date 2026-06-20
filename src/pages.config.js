@@ -50,6 +50,7 @@ import CampaignGMPanel from './pages/CampaignGMPanel';
 import CampaignInvite from './pages/CampaignInvite';
 import JoinCampaign from './pages/JoinCampaign';
 import CampaignPlayers from './pages/CampaignPlayers';
+import PendingApprovals from './pages/PendingApprovals';
 import CampaignUpdates from './pages/CampaignUpdates';
 import CampaignArchives from './pages/CampaignArchives';
 import CampaignSettings from './pages/CampaignSettings';
@@ -130,6 +131,7 @@ export const PAGES = {
     "CampaignInvite": CampaignInvite,
     "JoinCampaign": JoinCampaign,
     "CampaignPlayers": CampaignPlayers,
+    "PendingApprovals": PendingApprovals,
     "CampaignUpdates": CampaignUpdates,
     "CampaignArchives": CampaignArchives,
     "CampaignSettings": CampaignSettings,
