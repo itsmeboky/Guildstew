@@ -10,13 +10,18 @@
  * Requires a Google Cloud project the app owner sets up:
  *   VITE_GOOGLE_CLIENT_ID  — OAuth 2.0 Web client id
  *   VITE_GOOGLE_API_KEY    — API key with Picker API + Drive API enabled
+ *   VITE_GOOGLE_APP_ID     — the Cloud project NUMBER (Picker setAppId);
+ *                            without it the read of the picked file 403s
  * The OAuth consent screen and authorized JS origins must be configured
- * for the app's domain. When either env var is absent the picker UI
- * stays hidden and the paste flow is the only option.
+ * for the app's domain. When any env var is absent the picker UI stays
+ * hidden and the paste flow is the only option.
  */
 
 const CLIENT_ID = cleanEnv(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 const API_KEY = cleanEnv(import.meta.env.VITE_GOOGLE_API_KEY);
+// Cloud project number — Picker needs it (setAppId) to authorize the
+// OAuth token to read the file the user picks. Without it: 403 on read.
+const APP_ID = cleanEnv(import.meta.env.VITE_GOOGLE_APP_ID);
 // drive.file = per-file access, granted only for files the user picks.
 // Minimal scope that still allows exporting the chosen doc.
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
@@ -32,7 +37,11 @@ const GIS_SRC = "https://accounts.google.com/gsi/client";
 const GAPI_SRC = "https://apis.google.com/js/api.js";
 
 export function isPickerConfigured() {
-  return Boolean(CLIENT_ID && API_KEY);
+  // All three are required for an import to actually succeed: client id +
+  // api key to open the picker, app id (project number) so the granted
+  // token can read the picked file. Gating on all three avoids the
+  // "picked fine, 403 on read" dead end.
+  return Boolean(CLIENT_ID && API_KEY && APP_ID);
 }
 
 const scriptPromises = {};
@@ -106,10 +115,14 @@ export async function pickGoogleDoc() {
       const google = window.google;
       const view = new google.picker.DocsView(google.picker.ViewId.DOCUMENTS)
         .setMimeTypes("application/vnd.google-apps.document");
-      const picker = new google.picker.PickerBuilder()
+      let builder = new google.picker.PickerBuilder()
         .addView(view)
         .setOAuthToken(accessToken)
-        .setDeveloperKey(API_KEY)
+        .setDeveloperKey(API_KEY);
+      // App ID = Cloud project number. Required so the OAuth token is
+      // authorized to read the picked file (otherwise the export 403s).
+      if (APP_ID) builder = builder.setAppId(APP_ID);
+      const picker = builder
         .setCallback((data) => {
           if (data.action === google.picker.Action.PICKED) {
             const doc = data.docs?.[0];
