@@ -338,6 +338,26 @@ export const CLASS_WEAPON_PROFICIENCIES = {
   Wizard: ['dagger', 'dart', 'sling', 'quarterstaff', 'light crossbow'],
 };
 
+/**
+ * Racial proficiency grants (SRD). Keyed by race AND subrace display
+ * name; a character merges its base race entry with its subrace entry.
+ * Only races that grant weapon/armor/tool proficiencies appear; the
+ * rest get nothing here. (Stored as structured data because the RACES
+ * table records these only as feature-name strings.)
+ *   Dwarf  — Dwarven Combat Training (base, both subraces)
+ *   Mountain Dwarf — Dwarven Armor Training
+ *   High/Wood Elf  — Elf Weapon Training
+ *   Drow — Drow weapon training
+ */
+// SRD-only after the content lockdown: Dwarf (base — Dwarven Combat
+// Training, applies to Hill Dwarf) and High Elf (Elf Weapon Training).
+// Non-SRD subraces (Mountain Dwarf, Wood Elf, Drow) were trimmed, so
+// their proficiency entries are removed to stay aligned.
+export const RACE_PROFICIENCIES = {
+  Dwarf: { weapons: ['Battleaxe', 'Handaxe', 'Light hammer', 'Warhammer'] },
+  'High Elf': { weapons: ['Longsword', 'Shortsword', 'Shortbow', 'Longbow'] },
+};
+
 /** Spellcasting ability per class */
 export const SPELLCASTING_ABILITY = {
   Bard: 'cha', Cleric: 'wis', Druid: 'wis', Paladin: 'cha',
@@ -644,8 +664,8 @@ export const RACES = {
     features: ['Darkvision', 'Dwarven Resilience', 'Stonecunning'],
     languages: ['Common', 'Dwarvish'],
     subraces: {
+      // SRD 5.1 ships only Hill Dwarf; Mountain Dwarf trimmed (lockdown).
       'Hill Dwarf':     { abilityBonuses: { wis: 1 }, features: ['Dwarven Toughness (+1 HP/level)'] },
-      'Mountain Dwarf':  { abilityBonuses: { str: 2 }, features: ['Dwarven Armor Training'] },
     },
   },
   Elf: {
@@ -655,9 +675,8 @@ export const RACES = {
     features: ['Darkvision', 'Keen Senses', 'Fey Ancestry', 'Trance'],
     languages: ['Common', 'Elvish'],
     subraces: {
+      // SRD 5.1 ships only High Elf; Wood Elf / Drow trimmed (lockdown).
       'High Elf':  { abilityBonuses: { int: 1 }, features: ['Elf Weapon Training', 'Cantrip', 'Extra Language'] },
-      'Wood Elf':  { abilityBonuses: { wis: 1 }, features: ['Elf Weapon Training', 'Fleet of Foot (35 ft)', 'Mask of the Wild'], speed: 35 },
-      'Drow':      { abilityBonuses: { cha: 1 }, features: ['Superior Darkvision', 'Sunlight Sensitivity', 'Drow Magic'] },
     },
   },
   Gnome: {
@@ -667,7 +686,7 @@ export const RACES = {
     features: ['Darkvision', 'Gnome Cunning'],
     languages: ['Common', 'Gnomish'],
     subraces: {
-      'Forest Gnome': { abilityBonuses: { dex: 1 }, features: ['Natural Illusionist', 'Speak with Small Beasts'] },
+      // SRD 5.1 ships only Rock Gnome; Forest Gnome trimmed (lockdown).
       'Rock Gnome':   { abilityBonuses: { con: 1 }, features: ['Artificer\'s Lore', 'Tinker'] },
     },
   },
@@ -692,8 +711,8 @@ export const RACES = {
     features: ['Lucky', 'Brave', 'Halfling Nimbleness'],
     languages: ['Common', 'Halfling'],
     subraces: {
+      // SRD 5.1 ships only Lightfoot; Stout trimmed (lockdown).
       'Lightfoot': { abilityBonuses: { cha: 1 }, features: ['Naturally Stealthy'] },
-      'Stout':     { abilityBonuses: { con: 1 }, features: ['Stout Resilience'] },
     },
   },
   Human: {
@@ -1389,90 +1408,11 @@ export const ABILITY_SCORE_IMPROVEMENT_LEVELS = {
   Wizard:    [4, 8, 12, 16, 19],
 };
 
+// SRD 5.1 ships exactly one feat — Grappler. The remaining PHB feats
+// were trimmed for the public-release SRD lockdown; more feats are
+// future Brewery content. The ASI/feat picker reads this object, so it
+// now offers an ASI or the single SRD feat.
 export const FEATS = {
-  Alert: {
-    prerequisite: null,
-    effects: [
-      { type: 'initiative_bonus', value: 5 },
-      { type: 'immunity', condition: 'surprised' },
-      { type: 'special', description: 'Hidden attackers don\'t gain advantage against you' },
-    ],
-    description: '+5 initiative. Can\'t be surprised while conscious. Hidden creatures don\'t gain advantage on attacks against you.',
-  },
-  Athlete: {
-    prerequisite: null,
-    effects: [
-      { type: 'asi', choices: ['str', 'dex'], value: 1 },
-      { type: 'special', description: 'Standing from prone costs 5ft. Climbing doesn\'t cost extra. Running jump with 5ft start.' },
-    ],
-    description: '+1 STR or DEX. Standing from prone costs only 5ft. Climbing doesn\'t halve speed. Running long jump with only 5ft running start.',
-  },
-  Actor: {
-    prerequisite: null,
-    effects: [
-      { type: 'asi', ability: 'cha', value: 1 },
-      { type: 'advantage', on: 'Deception and Performance checks when pretending to be someone else' },
-      { type: 'special', description: 'Mimic speech/sounds of other creatures' },
-    ],
-    description: '+1 CHA. Advantage on Deception and Performance when passing as a different person. Can mimic speech of others.',
-  },
-  Charger: {
-    prerequisite: null,
-    effects: [
-      { type: 'special', description: 'After Dash, bonus action melee attack with +5 damage OR shove 10ft' },
-    ],
-    description: 'When you Dash, you can make one melee attack or shove as a bonus action. +5 damage on the attack, or push 10 feet on the shove.',
-  },
-  'Crossbow Expert': {
-    prerequisite: null,
-    effects: [
-      { type: 'ignore', property: 'Loading', description: 'Ignore loading property of crossbows you\'re proficient with' },
-      { type: 'special', description: 'No disadvantage on ranged attacks within 5ft of hostile creature' },
-      { type: 'bonus_attack', weapon: 'hand crossbow', description: 'After attacking with one-handed weapon, bonus action attack with hand crossbow' },
-    ],
-    description: 'Ignore loading on crossbows. No disadvantage on ranged within 5ft. Bonus action hand crossbow attack after one-handed weapon attack.',
-  },
-  'Defensive Duelist': {
-    prerequisite: { dex: 13 },
-    effects: [
-      { type: 'reaction', description: 'Add proficiency bonus to AC against one melee attack that hits you. Must be wielding a finesse weapon.' },
-    ],
-    description: 'Reaction: add proficiency to AC vs one melee attack. Requires finesse weapon.',
-  },
-  'Dual Wielder': {
-    prerequisite: null,
-    effects: [
-      { type: 'ac_bonus', value: 1, condition: 'Wielding a melee weapon in each hand' },
-      { type: 'special', description: 'Two-weapon fighting with non-light weapons' },
-      { type: 'special', description: 'Draw or stow two weapons at once' },
-    ],
-    description: '+1 AC when dual wielding. Can two-weapon fight without Light property. Draw/stow two weapons at once.',
-  },
-  'Dungeon Delver': {
-    prerequisite: null,
-    effects: [
-      { type: 'advantage', on: 'Perception and Investigation to detect secret doors' },
-      { type: 'advantage', on: 'Saving throws vs traps' },
-      { type: 'resistance', against: 'trap damage' },
-      { type: 'special', description: 'Search for traps at normal pace' },
-    ],
-    description: 'Advantage to detect secret doors. Advantage on saves vs traps. Resist trap damage. Search for traps at normal travel pace.',
-  },
-  Durable: {
-    prerequisite: null,
-    effects: [
-      { type: 'asi', ability: 'con', value: 1 },
-      { type: 'special', description: 'Minimum hit die recovery = 2 × CON modifier' },
-    ],
-    description: '+1 CON. When rolling hit dice, minimum recovery per die = 2 × CON modifier.',
-  },
-  'Elemental Adept': {
-    prerequisite: { spellcasting: true },
-    effects: [
-      { type: 'special', description: 'Choose acid, cold, fire, lightning, or thunder. Spells ignore resistance to that type. Treat 1s as 2s on damage dice.' },
-    ],
-    description: 'Choose a damage type. Your spells ignore resistance to it. Treat damage roll 1s as 2s. Can take multiple times for different types.',
-  },
   Grappler: {
     prerequisite: { str: 13 },
     effects: [
@@ -1480,260 +1420,6 @@ export const FEATS = {
       { type: 'special', description: 'Can pin a grappled creature (both restrained)' },
     ],
     description: 'Advantage on attacks vs creatures you grapple. Can pin (restrain both yourself and the grappled creature).',
-  },
-  'Great Weapon Master': {
-    prerequisite: null,
-    effects: [
-      { type: 'bonus_attack', trigger: 'crit or kill with melee', description: 'Bonus action melee attack on crit or kill' },
-      { type: 'power_attack', penalty: -5, bonus: 10, description: '-5 to attack roll, +10 to damage with heavy weapon' },
-    ],
-    description: 'On crit or kill with melee: bonus action melee attack. Before attacking with heavy weapon: -5 to hit, +10 damage.',
-  },
-  Healer: {
-    prerequisite: null,
-    effects: [
-      { type: 'special', description: 'Use healer\'s kit to stabilize AND restore 1 HP' },
-      { type: 'special', description: 'Use healer\'s kit as action: target regains 1d6+4+target\'s HD HP. Once per rest per creature.' },
-    ],
-    description: 'Healer\'s kit stabilizes AND restores 1 HP. As action, heal 1d6+4+target HD (once per rest per creature).',
-  },
-  'Heavily Armored': {
-    prerequisite: { proficiency: 'medium armor' },
-    effects: [
-      { type: 'asi', ability: 'str', value: 1 },
-      { type: 'proficiency', armor: 'heavy' },
-    ],
-    description: '+1 STR. Gain heavy armor proficiency.',
-  },
-  'Heavy Armor Master': {
-    prerequisite: { proficiency: 'heavy armor' },
-    effects: [
-      { type: 'asi', ability: 'str', value: 1 },
-      { type: 'damage_reduction', value: 3, types: ['bludgeoning', 'piercing', 'slashing'], condition: 'nonmagical, while wearing heavy armor' },
-    ],
-    description: '+1 STR. While wearing heavy armor, reduce nonmagical bludgeoning/piercing/slashing by 3.',
-  },
-  'Inspiring Leader': {
-    prerequisite: { cha: 13 },
-    effects: [
-      { type: 'special', description: '10 min speech gives up to 6 allies temp HP = your level + CHA mod. Once per short/long rest.' },
-    ],
-    description: '10 min speech. Up to 6 creatures gain temp HP = your level + CHA modifier. Once per rest.',
-  },
-  'Keen Mind': {
-    prerequisite: null,
-    effects: [
-      { type: 'asi', ability: 'int', value: 1 },
-      { type: 'special', description: 'Always know north. Always know hours until sunrise/sunset. Recall anything seen/heard in past month.' },
-    ],
-    description: '+1 INT. Always know north, time until sunrise/sunset. Perfect recall of past month.',
-  },
-  'Lightly Armored': {
-    prerequisite: null,
-    effects: [
-      { type: 'asi', choices: ['str', 'dex'], value: 1 },
-      { type: 'proficiency', armor: 'light' },
-    ],
-    description: '+1 STR or DEX. Gain light armor proficiency.',
-  },
-  Linguist: {
-    prerequisite: null,
-    effects: [
-      { type: 'asi', ability: 'int', value: 1 },
-      { type: 'languages', count: 3 },
-      { type: 'special', description: 'Create written ciphers. DC = INT score + proficiency.' },
-    ],
-    description: '+1 INT. Learn 3 languages. Create written ciphers (INT + proficiency DC to decipher).',
-  },
-  Lucky: {
-    prerequisite: null,
-    effects: [
-      { type: 'luck_points', count: 3, recharge: 'long rest' },
-      { type: 'special', description: 'Spend a luck point to roll extra d20 on attack, check, or save — choose which d20 to use. Can also spend on attack roll made against you.' },
-    ],
-    description: '3 luck points/long rest. Spend to roll extra d20 on attacks, checks, saves (choose which). Can force reroll on attacks against you.',
-  },
-  'Mage Slayer': {
-    prerequisite: null,
-    effects: [
-      { type: 'reaction', description: 'Melee attack when creature within 5ft casts a spell' },
-      { type: 'special', description: 'Target has disadvantage on concentration saves from your damage' },
-      { type: 'advantage', on: 'Saving throws vs spells cast by creatures within 5ft' },
-    ],
-    description: 'Reaction melee attack on nearby spellcaster. Disadvantage on their concentration saves from your damage. Advantage on saves vs spells within 5ft.',
-  },
-  'Magic Initiate': {
-    prerequisite: null,
-    effects: [
-      { type: 'special', description: 'Learn 2 cantrips and 1 first-level spell from one class spell list. Cast the 1st-level spell once per long rest.' },
-    ],
-    description: 'Learn 2 cantrips + 1 first-level spell from a class. Cast the spell once/long rest.',
-  },
-  'Martial Adept': {
-    prerequisite: null,
-    effects: [
-      { type: 'special', description: 'Martial Archetype subclass feature.' },
-    ],
-    description: 'Choose a Martial Archetype.',
-  },
-  'Medium Armor Master': {
-    prerequisite: { proficiency: 'medium armor' },
-    effects: [
-      { type: 'special', description: 'Medium armor DEX cap becomes +3 instead of +2' },
-      { type: 'special', description: 'Medium armor doesn\'t impose stealth disadvantage' },
-    ],
-    description: 'Medium armor: DEX max +3 (not +2). No stealth disadvantage from medium armor.',
-  },
-  Mobile: {
-    prerequisite: null,
-    effects: [
-      { type: 'speed_bonus', value: 10 },
-      { type: 'special', description: 'Dash through difficult terrain without extra cost' },
-      { type: 'special', description: 'When you melee attack a creature, it can\'t opportunity attack you for the rest of your turn' },
-    ],
-    description: '+10 speed. Dash ignores difficult terrain. Melee target can\'t opportunity attack you this turn.',
-  },
-  'Moderately Armored': {
-    prerequisite: { proficiency: 'light armor' },
-    effects: [
-      { type: 'asi', choices: ['str', 'dex'], value: 1 },
-      { type: 'proficiency', armor: ['medium', 'shields'] },
-    ],
-    description: '+1 STR or DEX. Gain medium armor and shield proficiency.',
-  },
-  'Mounted Combatant': {
-    prerequisite: null,
-    effects: [
-      { type: 'advantage', on: 'Melee attacks vs unmounted creatures smaller than mount' },
-      { type: 'special', description: 'Force attacks on mount to target you instead' },
-      { type: 'special', description: 'Mount takes no damage on DEX save success (half on fail)' },
-    ],
-    description: 'Advantage vs smaller unmounted creatures. Redirect attacks on mount to you. Mount gets Evasion.',
-  },
-  Observant: {
-    prerequisite: null,
-    effects: [
-      { type: 'asi', choices: ['int', 'wis'], value: 1 },
-      { type: 'special', description: 'Read lips if you can see the speaker\'s mouth' },
-      { type: 'passive_bonus', skills: ['Perception', 'Investigation'], value: 5 },
-    ],
-    description: '+1 INT or WIS. Read lips. +5 to passive Perception and Investigation.',
-  },
-  'Polearm Master': {
-    prerequisite: null,
-    effects: [
-      { type: 'bonus_attack', weapon: ['glaive', 'halberd', 'quarterstaff', 'spear'], damage: '1d4 bludgeoning', description: 'Bonus action attack with opposite end' },
-      { type: 'opportunity_attack', trigger: 'Creature enters your reach', description: 'OA when enemy enters reach, not just leaves' },
-    ],
-    description: 'Bonus action 1d4 butt-end attack with polearm. Opportunity attack when creatures ENTER your reach.',
-  },
-  Resilient: {
-    prerequisite: null,
-    effects: [
-      { type: 'asi', choices: ['str', 'dex', 'con', 'int', 'wis', 'cha'], value: 1 },
-      { type: 'save_proficiency', ability: 'chosen' },
-    ],
-    description: '+1 to chosen ability. Gain saving throw proficiency in that ability.',
-  },
-  'Ritual Caster': {
-    prerequisite: { int_or_wis: 13 },
-    effects: [
-      { type: 'special', description: 'Ritual book with 2 first-level ritual spells. Can add more rituals found during adventure.' },
-    ],
-    description: 'Ritual book with 2 first-level rituals. Can copy more into it.',
-  },
-  'Savage Attacker': {
-    prerequisite: null,
-    effects: [
-      { type: 'special', description: 'Once per turn, reroll melee weapon damage dice and use either total' },
-    ],
-    description: 'Once per turn: reroll melee damage dice, take either result.',
-  },
-  Sentinel: {
-    prerequisite: null,
-    effects: [
-      { type: 'special', description: 'Creatures you hit with OA have speed = 0 for the rest of the turn' },
-      { type: 'special', description: 'Disengage doesn\'t prevent your opportunity attacks' },
-      { type: 'reaction', description: 'When a creature within 5ft attacks a target other than you, melee attack against it' },
-    ],
-    description: 'OA reduces target speed to 0. Disengage doesn\'t stop your OA. Reaction attack when enemy attacks someone else near you.',
-  },
-  Sharpshooter: {
-    prerequisite: null,
-    effects: [
-      { type: 'special', description: 'No disadvantage at long range' },
-      { type: 'special', description: 'Ignore half and three-quarters cover' },
-      { type: 'power_attack', penalty: -5, bonus: 10, description: '-5 to attack, +10 damage with ranged weapon' },
-    ],
-    description: 'No disadvantage at long range. Ignore half/three-quarters cover. -5 to hit, +10 damage on ranged attacks.',
-  },
-  'Shield Master': {
-    prerequisite: null,
-    effects: [
-      { type: 'bonus_action', description: 'Shove as bonus action after Attack action' },
-      { type: 'special', description: 'Add shield\'s AC bonus to DEX saves vs single-target effects' },
-      { type: 'special', description: 'On successful DEX save: reaction to take no damage (Evasion with shield)' },
-    ],
-    description: 'Bonus action shove after Attack. Add shield AC to DEX saves. Reaction: no damage on DEX save success.',
-  },
-  Skilled: {
-    prerequisite: null,
-    effects: [
-      { type: 'special', description: 'Gain proficiency in any combination of three skills or tools.' },
-    ],
-    description: 'Gain proficiency in three skills or tools (any combination).',
-  },
-  'Skulker': {
-    prerequisite: { dex: 13 },
-    effects: [
-      { type: 'special', description: 'Can hide when lightly obscured' },
-      { type: 'special', description: 'Missing a ranged attack doesn\'t reveal your position' },
-      { type: 'special', description: 'No disadvantage on Perception in dim light' },
-    ],
-    description: 'Hide in light obscurement. Missed ranged attacks don\'t reveal you. No dim light Perception penalty.',
-  },
-  'Spell Sniper': {
-    prerequisite: { spellcasting: true },
-    effects: [
-      { type: 'special', description: 'Double range of attack roll spells' },
-      { type: 'special', description: 'Ranged spell attacks ignore half and three-quarters cover' },
-      { type: 'special', description: 'Learn one attack roll cantrip from any class' },
-    ],
-    description: 'Double spell attack range. Ignore half/three-quarters cover. Learn one attack cantrip.',
-  },
-  'Tavern Brawler': {
-    prerequisite: null,
-    effects: [
-      { type: 'ability_increase', amount: 1, choice: ['str', 'con'] },
-      { type: 'special', description: 'Proficient with improvised weapons.' },
-      { type: 'special', description: 'Unarmed strike damage becomes 1d4.' },
-      { type: 'special', description: 'When you hit with an unarmed strike or improvised weapon on your turn, you can use a bonus action to attempt to grapple the target.' },
-    ],
-    description: '+1 STR or CON. Proficient with improvised weapons. Unarmed strike does 1d4. Bonus-action grapple after a hit with unarmed / improvised.',
-  },
-  Tough: {
-    prerequisite: null,
-    effects: [
-      { type: 'hp_bonus', perLevel: 2 },
-    ],
-    description: 'HP max increases by 2 per level (including retroactively).',
-  },
-  'War Caster': {
-    prerequisite: { spellcasting: true },
-    effects: [
-      { type: 'advantage', on: 'Concentration saving throws' },
-      { type: 'special', description: 'Can perform somatic components with weapons/shield in hands' },
-      { type: 'special', description: 'Can cast a spell as opportunity attack instead of melee attack' },
-    ],
-    description: 'Advantage on concentration saves. Somatic components with full hands. Cast spell as opportunity attack.',
-  },
-  'Weapon Master': {
-    prerequisite: null,
-    effects: [
-      { type: 'asi', choices: ['str', 'dex'], value: 1 },
-      { type: 'proficiency', weapons: '4 weapons of choice' },
-    ],
-    description: '+1 STR or DEX. Gain proficiency with 4 weapons of your choice.',
   },
 };
 
@@ -2264,6 +1950,8 @@ export const INSPIRATION = {
 // BACKGROUNDS (Skill/Tool proficiencies)
 // ─────────────────────────────────────────────
 
+// SRD 5.1 ships exactly one background — Acolyte. The other PHB
+// backgrounds were trimmed for the public-release SRD lockdown.
 export const BACKGROUNDS = {
   Acolyte: {
     skills: ['Insight', 'Religion'],
@@ -2271,90 +1959,6 @@ export const BACKGROUNDS = {
     languages: 2,
     equipment: 'Holy symbol, prayer book, incense, vestments, common clothes, 15 GP',
     feature: 'Shelter of the Faithful',
-  },
-  Charlatan: {
-    skills: ['Deception', 'Sleight of Hand'],
-    tools: ['Disguise kit', 'Forgery kit'],
-    languages: 0,
-    equipment: 'Fine clothes, disguise kit, con tools, 15 GP',
-    feature: 'False Identity',
-  },
-  Criminal: {
-    skills: ['Deception', 'Stealth'],
-    tools: ['Thieves\' tools', 'Gaming set (one)'],
-    languages: 0,
-    equipment: 'Crowbar, dark common clothes with hood, 15 GP',
-    feature: 'Criminal Contact',
-  },
-  Entertainer: {
-    skills: ['Acrobatics', 'Performance'],
-    tools: ['Disguise kit', 'Musical instrument (one)'],
-    languages: 0,
-    equipment: 'Musical instrument, favor of an admirer, costume, 15 GP',
-    feature: 'By Popular Demand',
-  },
-  'Folk Hero': {
-    skills: ['Animal Handling', 'Survival'],
-    tools: ['Artisan\'s tools (one)', 'Vehicles (land)'],
-    languages: 0,
-    equipment: 'Artisan\'s tools, shovel, iron pot, common clothes, 10 GP',
-    feature: 'Rustic Hospitality',
-  },
-  'Guild Artisan': {
-    skills: ['Insight', 'Persuasion'],
-    tools: ['Artisan\'s tools (one)'],
-    languages: 1,
-    equipment: 'Artisan\'s tools, letter of introduction, traveler\'s clothes, 15 GP',
-    feature: 'Guild Membership',
-  },
-  Hermit: {
-    skills: ['Medicine', 'Religion'],
-    tools: ['Herbalism kit'],
-    languages: 1,
-    equipment: 'Herbalism kit, winter blanket, common clothes, 5 GP',
-    feature: 'Discovery',
-  },
-  Noble: {
-    skills: ['History', 'Persuasion'],
-    tools: ['Gaming set (one)'],
-    languages: 1,
-    equipment: 'Fine clothes, signet ring, scroll of pedigree, 25 GP',
-    feature: 'Position of Privilege',
-  },
-  Outlander: {
-    skills: ['Athletics', 'Survival'],
-    tools: ['Musical instrument (one)'],
-    languages: 1,
-    equipment: 'Staff, hunting trap, animal trophy, traveler\'s clothes, 10 GP',
-    feature: 'Wanderer',
-  },
-  Sage: {
-    skills: ['Arcana', 'History'],
-    tools: [],
-    languages: 2,
-    equipment: 'Ink, quill, small knife, letter from dead colleague, common clothes, 10 GP',
-    feature: 'Researcher',
-  },
-  Sailor: {
-    skills: ['Athletics', 'Perception'],
-    tools: ['Navigator\'s tools', 'Vehicles (water)'],
-    languages: 0,
-    equipment: 'Belaying pin (club), silk rope 50ft, lucky charm, common clothes, 10 GP',
-    feature: 'Ship\'s Passage',
-  },
-  Soldier: {
-    skills: ['Athletics', 'Intimidation'],
-    tools: ['Gaming set (one)', 'Vehicles (land)'],
-    languages: 0,
-    equipment: 'Insignia of rank, trophy from fallen enemy, dice/cards, common clothes, 10 GP',
-    feature: 'Military Rank',
-  },
-  Urchin: {
-    skills: ['Sleight of Hand', 'Stealth'],
-    tools: ['Disguise kit', 'Thieves\' tools'],
-    languages: 0,
-    equipment: 'Small knife, map of home city, pet mouse, parents\' token, common clothes, 10 GP',
-    feature: 'City Secrets',
   },
 };
 
@@ -2374,6 +1978,43 @@ export const LANGUAGES = {
     Sylvan: 'Elvish', Undercommon: 'Elvish',
   },
 };
+
+// Flat, ordered list of every selectable SRD language (standard + exotic).
+// Primordial's elemental dialects (Aquan/Auran/Ignan/Terran) are NOT separate
+// picks under SRD 5.1 — they're dialects of Primordial — so they're excluded
+// from the picker.
+export const ALL_LANGUAGES = [...LANGUAGES.standard, ...LANGUAGES.exotic];
+
+/**
+ * Languages a race + subrace grant. Reads the RACES registry as source of
+ * truth: each race's `languages` array lists fixed languages plus the
+ * sentinel '+1 choice' for a bonus slot (Human, Half-Elf). A subrace adds a
+ * slot either via its own '+1 choice' sentinel or the 'Extra Language'
+ * feature (High Elf). Returns:
+ *   { fixed: string[]  – auto-granted (always includes Common),
+ *     choices: number  – how many extra languages the player may pick }
+ */
+export function getRaceLanguages(race, subrace) {
+  const r = RACES[race];
+  const fixed = [];
+  let choices = 0;
+  const take = (l) => {
+    if (l === '+1 choice') choices += 1;
+    else if (l && !fixed.includes(l)) fixed.push(l);
+  };
+  (r?.languages || []).forEach(take);
+  const sub = r?.subraces?.[subrace];
+  if (sub) {
+    (sub.languages || []).forEach(take);
+    // High Elf (and any future subrace) expresses its bonus language as a
+    // feature rather than a sentinel — honor it without hard-coding the race.
+    if (Array.isArray(sub.features) && sub.features.includes('Extra Language')) {
+      choices += 1;
+    }
+  }
+  if (fixed.length === 0) fixed.push('Common'); // brewery / unknown race fallback
+  return { fixed, choices };
+}
 
 // ─────────────────────────────────────────────
 // TOOL PROFICIENCIES

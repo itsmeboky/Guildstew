@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { ABILITY_NAMES } from "@/components/dnd5e/dnd5eRules";
@@ -7,7 +7,8 @@ import {
   applyBreweryClassBaseline,
   clearBreweryClassMarkers,
 } from "@/lib/breweryClassApply";
-import CompanionPicker from "@/components/characterCreator/CompanionPicker";
+import { LevelPicker } from "@/components/characterCreator/LevelPicker";
+import { trimChoicesToLevel } from "@/components/characterCreator/levelTrim";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 import { Primer } from "@/components/characterCreator/chrome/Primer";
 import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
@@ -32,7 +33,9 @@ const CLASS_FAMILY = {
 
 // Per-class tinted accent — used in the featured tome hero, playstyle
 // callout border, subclass card highlights, and build summary heading.
-const CLASS_ACCENT = {
+// Exported so the Bonds & Allies step (which renders the gated bond
+// cards relocated off this step) tints them with the same palette.
+export const CLASS_ACCENT = {
   Barbarian: "#D89860", Bard: "#FF4DA6",
   Cleric: "#FFF1D2",    Druid: "#52D880",
   Fighter: "#FF5040",   Monk: "#3FE0E8",
@@ -44,7 +47,10 @@ const CLASS_ACCENT = {
 // Class lore + structural fields — merged from the existing creator's
 // descriptions + the prototype data.jsx subclass / companion content.
 // Icons are the existing app's URL artwork.
-const CLASSES_DATA = [
+// Exported so the Bonds & Allies step can resolve the picked class's
+// data object (for bondsForClass + the Warlock patron readout) without
+// duplicating the roster.
+export const CLASSES_DATA = [
   {
     name: "Barbarian",
     blurb: "Barbarians are fierce warriors who draw on primal rage. Highest hit points of any class — they charge in and out-soldier everyone.",
@@ -57,7 +63,6 @@ const CLASSES_DATA = [
     subclassName: "Primal Path", subclassLevel: 3,
     subclasses: [
       { name: "Path of the Berserker", desc: "Pure fury. Frenzy lets you attack as a bonus action while raging.", best: "Players who want unfiltered damage." },
-      { name: "Path of the Totem Warrior", desc: "Channel animal spirits for resistance, speed, or aim.", best: "Strategic damage-takers who want utility." },
     ],
   },
   {
@@ -72,7 +77,6 @@ const CLASSES_DATA = [
     subclassName: "Bard College", subclassLevel: 3,
     subclasses: [
       { name: "College of Lore", desc: "Bonus skills, Cutting Words to debuff enemies, and extra spells from other lists.", best: "Skill monkeys and spell-thieves." },
-      { name: "College of Valor", desc: "Better armor & weapons, Extra Attack at 6th. Combat bard.", best: "Front-line inspiring warriors." },
     ],
   },
   {
@@ -87,8 +91,6 @@ const CLASSES_DATA = [
     subclassName: "Divine Domain", subclassLevel: 1,
     subclasses: [
       { name: "Life Domain", desc: "The premier healer. Disciples of Life bonus healing & heavy armor.", best: "Players who love keeping the party alive." },
-      { name: "Light Domain", desc: "Blaster cleric. Fire spells, Warding Flare, Radiance of the Dawn.", best: "Damage-leaning clerics." },
-      { name: "War Domain", desc: "Heavy armor, martial weapons, bonus attack via War Priest.", best: "Front-line holy warriors." },
     ],
   },
   {
@@ -103,7 +105,6 @@ const CLASSES_DATA = [
     subclassName: "Druid Circle", subclassLevel: 2,
     subclasses: [
       { name: "Circle of the Land", desc: "Spellcasting-focused. Bonus spells based on terrain — forest, mountain, etc.", best: "Druids who want stronger spellcasting." },
-      { name: "Circle of the Moon", desc: "Wildshape into a brown bear at L2. Massive HP pool, frontline beast.", best: "Players who want to BE the animal." },
     ],
   },
   {
@@ -118,7 +119,6 @@ const CLASSES_DATA = [
     subclassName: "Martial Archetype", subclassLevel: 3,
     subclasses: [
       { name: "Champion", desc: "Crit on 19-20, extra athleticism. The simplest fighter to play.", best: "New players who want to swing weapons reliably." },
-      { name: "Battle Master", desc: "Maneuvers (trip, disarm, riposte) powered by superiority dice. Tactical.", best: "Players who like options each round." },
     ],
   },
   {
@@ -133,7 +133,6 @@ const CLASSES_DATA = [
     subclassName: "Monastic Tradition", subclassLevel: 3,
     subclasses: [
       { name: "Way of the Open Hand", desc: "Classic unarmed combat — knockdown, knockback, pressure points.", best: "Players who want clean punch-and-kick combat." },
-      { name: "Way of Shadow", desc: "Stealth, teleportation, ki-fueled illusions. Ninja monk.", best: "Players who like sneaking and ambushing." },
     ],
   },
   {
@@ -148,8 +147,6 @@ const CLASSES_DATA = [
     subclassName: "Sacred Oath", subclassLevel: 3,
     subclasses: [
       { name: "Oath of Devotion", desc: "The classic paladin — honor, justice, smites against unholy foes.", best: "Lawful good champions." },
-      { name: "Oath of the Ancients", desc: "Nature, beauty, defiance of darkness. Damage resistance aura.", best: "Defensive ranger-paladins." },
-      { name: "Oath of Vengeance", desc: "Hunt evildoers. Mobility, Vow of Enmity for advantage.", best: "Single-target damage paladins." },
     ],
   },
   {
@@ -160,11 +157,10 @@ const CLASSES_DATA = [
     savingThrows: ["Strength", "Dexterity"],
     features: ["Favored Enemy", "Natural Explorer"],
     icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/748e5be38_Ranger1.png",
-    spellcaster: "half", spellAbility: "wis", hasCompanion: true,
+    spellcaster: "half", spellAbility: "wis",
     subclassName: "Ranger Archetype", subclassLevel: 3,
     subclasses: [
       { name: "Hunter", desc: "Pick anti-horde, anti-boss, or defensive bonuses. Pure combat.", best: "Bow-focused damage rangers." },
-      { name: "Beast Master", desc: "Gain a loyal animal companion. Fight side by side.", best: "Players who want a pet from level 3." },
     ],
     companions: [
       { name: "Wolf", desc: "Pack tactics — advantage when allies are adjacent." },
@@ -186,8 +182,6 @@ const CLASSES_DATA = [
     subclassName: "Roguish Archetype", subclassLevel: 3,
     subclasses: [
       { name: "Thief", desc: "Fast hands (bonus action utility), second-story work. Classic burglar.", best: "Skill-heavy adventurers." },
-      { name: "Assassin", desc: "Auto-crit surprise attacks, disguises, poisons.", best: "Burst damage from the shadows." },
-      { name: "Arcane Trickster", desc: "Wizard spells, Mage Hand legerdemain. Spell + skill hybrid.", best: "Spellsword rogues." },
     ],
   },
   {
@@ -202,7 +196,6 @@ const CLASSES_DATA = [
     subclassName: "Sorcerous Origin", subclassLevel: 1,
     subclasses: [
       { name: "Draconic Bloodline", desc: "Dragon ancestry — bonus HP, scaly skin, breath-themed damage.", best: "Durable blasters." },
-      { name: "Wild Magic", desc: "Roll on the Wild Magic table — chaos triggers when you cast.", best: "Players who love unpredictability." },
     ],
   },
   {
@@ -217,8 +210,6 @@ const CLASSES_DATA = [
     subclassName: "Otherworldly Patron", subclassLevel: 1,
     subclasses: [
       { name: "The Fiend", desc: "A pact with a devil or demon. Bonus temp HP on kills, fire spells.", best: "Damage-and-survival warlocks." },
-      { name: "The Archfey", desc: "Pact with a fey lord. Charm, fear, fey teleports.", best: "Trickster warlocks." },
-      { name: "The Great Old One", desc: "Eldritch alien horror. Telepathy, psychic damage, madness.", best: "Mysterious manipulators." },
     ],
     companions: [
       { name: "Imp", desc: "Fiendish. Invisible, shapechanger, telepathic." },
@@ -239,8 +230,6 @@ const CLASSES_DATA = [
     subclassName: "Arcane Tradition", subclassLevel: 2,
     subclasses: [
       { name: "School of Evocation", desc: "Sculpt your fireballs around allies. Damage school.", best: "Blaster wizards." },
-      { name: "School of Divination", desc: "Portent — replace any roll with a pre-rolled d20.", best: "Strategic minds." },
-      { name: "School of Abjuration", desc: "Arcane Ward absorbs damage. Tankier wizard.", best: "Defensive casters." },
     ],
   },
 ];
@@ -329,6 +318,20 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
     updateCharacterData({ subclass: subclassName });
   };
 
+  // Level is set once, here on the Class step (relocated from Identity +
+  // the old Features-step picker). Clamp 1–20; downstream HP / proficiency
+  // / slots / feature accumulation all read characterData.level.
+  const handlePickLevel = (newLevel) => {
+    const lvl = Math.max(1, Math.min(20, Number(newLevel) || 1));
+    // On a level DECREASE, trim choices that are no longer legal
+    // (over-cap spells, excess invocations/arcanum/expertise, a subclass
+    // picked above the new level) so nothing stale persists or locks.
+    const trim = lvl < (Number(characterData.level) || 1)
+      ? trimChoicesToLevel(characterData, lvl)
+      : {};
+    updateCharacterData({ level: lvl, ...trim });
+  };
+
   return (
     <div>
       <StepHeader
@@ -354,6 +357,16 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+          <div className="tome" style={{ padding: '24px 28px' }}>
+            <LevelPicker
+              totalLevel={characterData.level || 1}
+              primaryClassName={characterData.class || ''}
+              primaryClassLevel={characterData.level || 1}
+              multiclasses={[]}
+              onChange={handlePickLevel}
+            />
+          </div>
+
           {selectedClass ? (
             <ClassFeaturedTome
               cls={selectedClass}
@@ -366,27 +379,15 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
             <EmptyClassPrompt />
           )}
 
-          {selectedClass && (
-            <BondsTome
-              cls={selectedClass}
-              accent={accent}
-              data={characterData}
-              update={updateCharacterData}
-            />
-          )}
+          {/* Bonds & Allies relocated to its own step (after Skills,
+              before Equipment) — see BondsAndAlliesStep. The gated bond
+              cards, patron readout, and familiar picker now live there
+              alongside the universal free-create relationships section. */}
 
           {selectedClass?._source === "brewery" && (
             <BreweryClassPickers
               characterData={characterData}
               updateCharacterData={updateCharacterData}
-            />
-          )}
-
-          {selectedClass && (selectedClass.hasCompanion || selectedClass.hasPatron) && (
-            <CompanionPicker
-              characterData={characterData}
-              updateCharacterData={updateCharacterData}
-              campaignId={campaignId}
             />
           )}
         </div>
@@ -568,9 +569,14 @@ function SubclassChapter({ cls, accent, subclass, level, onPick }) {
       >
         {availableNow
           ? `Active at your current level (${level || 1}).`
-          : `Unlocks at level ${cls.subclassLevel} — pick now to plan your build.`}
+          : `Unlocks at level ${cls.subclassLevel}. Raise your level above to choose.`}
       </div>
 
+      {/* Subclass is gated by level: the picker only appears once the
+          class actually grants the subclass (level >= subclassLevel).
+          Below that, no picker — closing the "pick before you've
+          unlocked it" leak. */}
+      {availableNow && (
       <div
         style={{
           display: 'grid',
@@ -619,323 +625,7 @@ function SubclassChapter({ cls, accent, subclass, level, onPick }) {
           );
         })}
       </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// BONDS TOME — patrons / deities / companions / mounts / circles / origins
-// ============================================================================
-function bondsForClass(cls, data) {
-  const bonds = [];
-  const subclass = (cls.subclasses || []).find((s) => s.name === data.subclass) || null;
-
-  if (cls.name === "Warlock") {
-    bonds.push({
-      key: "patron",
-      label: "Your Patron",
-      kicker: "The being you serve",
-      presetOptions: (cls.subclasses || []).map((s) => ({ id: s.name, name: s.name, desc: s.desc })),
-      preset: subclass ? { name: subclass.name, desc: subclass.desc } : null,
-      placeholder: "Asmodeus, Mab, the Whisper Beyond...",
-      descPlaceholder: "What do they want from you? How did the pact form?",
-    });
-    bonds.push({
-      key: "familiar",
-      label: "Pact of the Chain Familiar",
-      kicker: "Optional — unlocks at level 3 with Pact of the Chain",
-      presetOptions: (cls.companions || []).map((c) => ({ id: c.name, name: c.name, desc: c.desc })),
-      preset: null,
-      placeholder: "Wisp, Shadowclaw, Bound-In-Chains...",
-      descPlaceholder: "What does it look like? What does it whisper?",
-    });
-  }
-
-  if (cls.name === "Ranger") {
-    bonds.push({
-      key: "companion",
-      label: "Animal Companion",
-      kicker: "Beast Master ranger — unlocks at level 3",
-      presetOptions: (cls.companions || []).map((c) => ({ id: c.name, name: c.name, desc: c.desc })),
-      preset: null,
-      placeholder: "Rangefur, Talonshine, Old Boar...",
-      descPlaceholder: "How did they bond? What's their personality?",
-    });
-  }
-
-  if (cls.name === "Paladin") {
-    bonds.push({
-      key: "deity",
-      label: "Your Deity",
-      kicker: "The power your oath is sworn to",
-      placeholder: "Bahamut, the Dawnflower, the Silent Watcher...",
-      descPlaceholder: "What does your deity stand for? What rites do you keep?",
-    });
-    bonds.push({
-      key: "mount",
-      label: "Celestial Mount",
-      kicker: "Optional — unlocks via Find Steed at level 5",
-      placeholder: "Brightmane, Stormhoof, Last-Sunrise...",
-      descPlaceholder: "Pegasus, warhorse, dire wolf — what answers your call?",
-    });
-  }
-
-  if (cls.name === "Cleric") {
-    bonds.push({
-      key: "deity",
-      label: "Your Deity",
-      kicker: subclass ? `Chosen of the ${subclass.name}` : "The god whose miracles you channel",
-      placeholder: "Pelor, Moradin, the Raven Queen...",
-      descPlaceholder: "What does your god demand? What do you preach?",
-    });
-  }
-
-  if (cls.name === "Druid") {
-    bonds.push({
-      key: "circle",
-      label: "Your Druidic Circle",
-      kicker: "The grove or order that taught you",
-      placeholder: "Circle of the Iron Birch, the Tidal Court...",
-      descPlaceholder: "Where do you gather? What rites do you observe?",
-    });
-  }
-
-  if (cls.name === "Sorcerer") {
-    bonds.push({
-      key: "origin",
-      label: "Source of your magic",
-      kicker: subclass ? subclass.name : "The wellspring of your power",
-      preset: subclass ? { name: subclass.name, desc: subclass.desc } : null,
-      placeholder: "My dragon ancestor Vrazak, a wild surge in the womb...",
-      descPlaceholder: "How does the magic feel? Does it want anything?",
-    });
-  }
-
-  return bonds;
-}
-
-function BondsTome({ cls, accent, data, update }) {
-  const bonds = bondsForClass(cls, data);
-  if (bonds.length === 0) return null;
-
-  return (
-    <div className="tome" style={{ padding: '32px 36px' }}>
-      <OrnateHeading color={accent}>Bonds &amp; Allies</OrnateHeading>
-      <div
-        className="italic-serif"
-        style={{
-          textAlign: 'center',
-          color: 'var(--text-dim)',
-          fontSize: 15,
-          maxWidth: 600,
-          margin: '0 auto 22px',
-        }}
-      >
-        Your hero doesn't walk alone. Detail the beings — divine, infernal, animal — that shape their power.
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-        {bonds.map((bond) => (
-          <AllyCard
-            key={bond.key}
-            bond={bond}
-            accent={accent}
-            data={data}
-            update={update}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function AllyCard({ bond, accent, data, update }) {
-  const allies = data.allies || {};
-  const ally = allies[bond.key] || {};
-  const setAlly = (patch) => {
-    update({ allies: { ...allies, [bond.key]: { ...ally, ...patch } } });
-  };
-
-  const effectiveName = ally.name ?? bond.preset?.name ?? '';
-  const effectiveDesc = ally.desc ?? bond.preset?.desc ?? '';
-
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '160px 1fr',
-        gap: 20,
-        padding: 20,
-        background: `linear-gradient(135deg, ${accent}0E, transparent 70%)`,
-        border: `1px solid ${accent}33`,
-        borderLeft: `3px solid ${accent}`,
-        borderRadius: 6,
-      }}
-    >
-      <AllyPortrait
-        src={ally.image}
-        onChange={(img) => setAlly({ image: img })}
-      />
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div>
-          <div className="label" style={{ color: accent, marginBottom: 4 }}>{bond.kicker}</div>
-          <div className="display" style={{ fontSize: 22, color: 'var(--text)' }}>{bond.label}</div>
-        </div>
-
-        {bond.presetOptions && bond.presetOptions.length > 0 && (
-          <PresetPicker
-            options={bond.presetOptions}
-            current={ally.presetId}
-            color={accent}
-            onPick={(opt) => setAlly({
-              presetId: opt.id,
-              name: ally.name?.trim() ? ally.name : opt.name,
-              desc: ally.desc?.trim() ? ally.desc : opt.desc,
-            })}
-          />
-        )}
-
-        <div>
-          <div className="label" style={{ marginBottom: 4, color: 'var(--text-dim)' }}>Name</div>
-          <input
-            className="input"
-            value={effectiveName}
-            onChange={(e) => setAlly({ name: e.target.value })}
-            placeholder={bond.placeholder}
-            style={{ fontFamily: 'var(--display)', fontSize: 18 }}
-          />
-        </div>
-
-        <div>
-          <div className="label" style={{ marginBottom: 4, color: 'var(--text-dim)' }}>Description</div>
-          <textarea
-            className="input italic-serif"
-            value={effectiveDesc}
-            onChange={(e) => setAlly({ desc: e.target.value })}
-            placeholder={bond.descPlaceholder}
-            rows={3}
-            style={{
-              resize: 'vertical',
-              minHeight: 70,
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 14,
-              lineHeight: 1.5,
-            }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AllyPortrait({ src, onChange }) {
-  const inputRef = useRef(null);
-  const [drag, setDrag] = useState(false);
-  const handleFile = (file) => {
-    if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = (e) => onChange(e.target.result);
-    reader.readAsDataURL(file);
-  };
-  return (
-    <div
-      onClick={() => inputRef.current?.click()}
-      onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={(e) => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer.files?.[0]); }}
-      style={{
-        width: '100%',
-        height: 160,
-        borderRadius: 8,
-        background: src ? `url(${src}) center/cover` : 'rgba(11,19,28,0.6)',
-        border: `2px ${drag ? 'solid' : 'dashed'} ${drag || src ? 'var(--orange)' : 'var(--border-strong)'}`,
-        cursor: 'pointer',
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        transition: 'border-color .15s, background .15s',
-        overflow: 'hidden',
-      }}
-    >
-      {!src && (
-        <div style={{ textAlign: 'center', color: 'var(--text-faint)', pointerEvents: 'none', padding: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 6, opacity: 0.5 }}>⊕</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)' }}>Drop their likeness</div>
-        </div>
       )}
-      {src && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onChange(''); }}
-          style={{
-            position: 'absolute',
-            top: 6,
-            right: 6,
-            background: 'rgba(0,0,0,0.72)',
-            color: 'white',
-            border: 'none',
-            borderRadius: 6,
-            padding: '3px 7px',
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          Replace
-        </button>
-      )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => handleFile(e.target.files?.[0])}
-      />
-    </div>
-  );
-}
-
-function PresetPicker({ options, current, color, onPick }) {
-  return (
-    <div>
-      <div className="label" style={{ marginBottom: 6, color: 'var(--text-dim)' }}>
-        Pick a preset (you can edit)
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {options.map((opt) => {
-          const active = current === opt.id;
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => onPick(opt)}
-              style={{
-                all: 'unset',
-                cursor: 'pointer',
-                padding: '6px 12px',
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: 700,
-                background: active ? color : 'transparent',
-                color: active ? 'white' : 'var(--text-dim)',
-                border: `1px solid ${active ? color : 'var(--border)'}`,
-                transition: 'all .15s',
-              }}
-              onMouseEnter={(e) => {
-                if (!active) e.currentTarget.style.borderColor = color;
-              }}
-              onMouseLeave={(e) => {
-                if (!active) e.currentTarget.style.borderColor = 'var(--border)';
-              }}
-            >
-              {opt.name}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }

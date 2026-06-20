@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Trash2, Search, Check, Dices, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { STARTING_EQUIPMENT } from "@/components/dnd5e/dnd5eRules";
 import { getGamePack } from "@/data/games";
+import { buildStartingKit, classifyType } from "@/components/characterCreator/startingKit";
 import { safeText } from "@/utils/safeRender";
 import { isLockedInventoryItem } from "@/config/cipherInventoryItems";
 import { HelpTip } from "@/components/characterCreator/chrome/HelpTip";
@@ -68,10 +69,11 @@ export default function EquipmentStep({ characterData, updateCharacterData }) {
   const usedStartingGold = !!characterData.used_starting_gold;
 
   // Bazaar state
-  const allItems = useMemo(() => {
-    const gamePackId = characterData.gamePack || "dnd5e_2014";
-    return getGamePack(gamePackId).getEquipment();
-  }, [characterData.gamePack]);
+  const gamePack = useMemo(
+    () => getGamePack(characterData.gamePack || "dnd5e_2014"),
+    [characterData.gamePack],
+  );
+  const allItems = useMemo(() => gamePack.getEquipment(), [gamePack]);
   const [showBazaar, setShowBazaar] = useState(false);
   const [itemSearch, setItemSearch] = useState("");
   const [itemTypeFilter, setItemTypeFilter] = useState("all");
@@ -104,15 +106,30 @@ export default function EquipmentStep({ characterData, updateCharacterData }) {
   };
 
   const applyStartingEquipment = () => {
-    const picked = selectedChoices.filter(Boolean);
-    const all = [...fixedItems, ...picked];
-    const items = all.map((name) => ({ name, quantity: 1, weight: 0, description: "" }));
-    updateCharacterData({ inventory: [...inventory, ...items] });
+    const kitItems = buildStartingKit(fixedItems, selectedChoices, (n) => gamePack.getEquipmentByName(n));
+    // Idempotent: drop any previously-applied kit items before re-adding,
+    // so clicking "add starting equipment" twice can't duplicate the kit.
+    const nonKit = inventory.filter((it) => it?.source !== "starting-kit");
+    updateCharacterData({
+      inventory: [...nonKit, ...kitItems],
+      // Kit and rolled gold are mutually exclusive (SRD): taking the kit
+      // turns the gold option off.
+      used_starting_gold: false,
+    });
     toast.success("Starting equipment added to inventory.");
   };
 
   const toggleUseStartingGold = () => {
-    updateCharacterData({ used_starting_gold: !usedStartingGold });
+    const next = !usedStartingGold;
+    if (next) {
+      // Choosing rolled gold clears the starting kit — alternatives, not both.
+      updateCharacterData({
+        used_starting_gold: true,
+        inventory: inventory.filter((it) => it?.source !== "starting-kit"),
+      });
+    } else {
+      updateCharacterData({ used_starting_gold: false });
+    }
   };
 
   const addInventoryItem = () => {
@@ -135,11 +152,14 @@ export default function EquipmentStep({ characterData, updateCharacterData }) {
   };
 
   const addItemFromBrowser = (item) => {
-    const weight = Number(item?.properties?.weight ?? item?.properties?._raw?.weight ?? 0) || 0;
+    const weight = Number(item?.weight ?? item?.properties?.weight ?? item?.properties?._raw?.weight ?? 0) || 0;
     const description = typeof item?.description === "string" ? item.description.slice(0, 240) : "";
-    updateCharacterData({
-      inventory: [...inventory, { name: item.name, quantity: 1, weight, description }],
-    });
+    // Carry a structured type so AC (and future consumers) can identify
+    // armor/shield without string-guessing.
+    const type = classifyType(item);
+    const next = { name: item.name, quantity: 1, weight, description, type };
+    if (type === "armor" || type === "shield") next.armorCategory = item.armorCategory;
+    updateCharacterData({ inventory: [...inventory, next] });
     toast.success(`Added ${item.name}`);
   };
 

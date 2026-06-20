@@ -76,38 +76,32 @@ export const FIND_STEED = [
  * "chain", so the imp / pseudodragon / quasit / sprite list was
  * never appended. Take the Pact Boon explicitly.
  */
-export function resolveCompanionContext({ className, subclass, pactBoon }) {
+export function resolveCompanionContext({ className, pactBoon, level }) {
   if (className === "Wizard") {
     return { kind: "familiar", title: "Familiar", description: "Your magical companion that serves and scouts for you.", list: FIND_FAMILIAR };
   }
   if (className === "Warlock") {
-    // Without Pact of the Chain, warlocks still flavor a patron but
-    // don't get a creature statblock — surface the familiar list so
-    // the player can still pick an option, and upgrade it when
-    // Chain is chosen.
+    // The ONLY SRD source of a Warlock familiar is Pact of the Chain,
+    // gained with the Pact Boon at level 3. No boon, a Tome/Blade boon,
+    // or a level below 3 → no familiar picker at all. (Pact of the Chain
+    // adds imp / pseudodragon / quasit / sprite to the standard list.)
     const isChain = (pactBoon || "").toLowerCase().includes("chain");
+    if (!isChain || (Number(level) || 1) < 3) return null;
     return {
-      kind: isChain ? "familiar_chain" : "familiar",
+      kind: "familiar_chain",
       title: "Familiar",
-      description: isChain
-        ? "Pact of the Chain unlocks imp, pseudodragon, quasit, and sprite in addition to the standard familiar list."
-        : "Pick a familiar. Pact of the Chain will unlock fiendish, fey, and draconic options.",
-      list: isChain ? [...FIND_FAMILIAR, ...PACT_OF_CHAIN_FAMILIARS] : FIND_FAMILIAR,
+      description: "Pact of the Chain unlocks imp, pseudodragon, quasit, and sprite in addition to the standard familiar list.",
+      list: [...FIND_FAMILIAR, ...PACT_OF_CHAIN_FAMILIARS],
     };
   }
   if (className === "Paladin") {
     return { kind: "steed", title: "Mount", description: "Your loyal steed that accompanies you in battle.", list: FIND_STEED };
   }
   if (className === "Ranger") {
-    const isBeastMaster = (subclass || "").toLowerCase().includes("beast");
-    return {
-      kind: isBeastMaster ? "beast_master" : "beast",
-      title: "Animal Companion",
-      description: isBeastMaster
-        ? "Beast Master lets you bond with any beast of CR 1/4 or lower. Pick from the filtered SRD list or supply a custom beast."
-        : "Rangers can keep an animal companion even without the Beast Master subclass — pick something that fits your theme.",
-      list: isBeastMaster ? [] : FIND_FAMILIAR.filter((f) => f.creature_type === "beast"),
-    };
+    // No SRD Ranger gets an animal companion: the only SRD Ranger
+    // subclass is Hunter, and Beast Master (the companion subclass) is
+    // non-SRD and has been removed. The Ranger picker never renders.
+    return null;
   }
   if (className === "Druid") {
     return {

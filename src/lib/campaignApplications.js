@@ -1,5 +1,6 @@
 import { supabase } from "@/api/supabaseClient";
 import { listCampaignBans } from "@/lib/campaignBans";
+import { buildCampaignCloneRow } from "@/lib/cloneCharacterRow";
 
 /**
  * Campaign application + approval pipeline client.
@@ -231,15 +232,177 @@ export async function acceptApplication({ application }) {
     .eq("id", application.id);
   if (updErr) throw updErr;
 
-  // Associate the presented character with this campaign so the
-  // standard GM panel sees it in its character list.
+  // Clone the player's LIBRARY character into a campaign-owned copy, rather
+  // than stamping campaign_id onto the library row (which made the campaign
+  // char and the library char the same row — the source of library
+  // contamination during play and the kick-PATCH 403). The clone is what
+  // plays/levels/dies; the library original is left pristine (campaign_id
+  // stays null). Mirrors CharacterPickerView.cloneMutation for the
+  // application path. Non-fatal: must never block the accept itself.
   if (application.character_id) {
-    await supabase
+    const cloneId = await cloneCharacterForCampaign({
+      applicationId: application.id,
+      sourceCharacterId: application.character_id,
+      campaignId: application.campaign_id,
+    }).catch((err) => {
+      if (typeof console !== "undefined") console.warn("cloneCharacterForCampaign failed (non-fatal):", err);
+      return null;
+    });
+
+    // Materialize the joining character's creator-side bonds into the
+    // campaign as PENDING items for the GM to accept/reject in the lobby.
+    // Reads the CLONE's creator_data (a copy of the original's) — readable
+    // by the GM via the campaign-GM SELECT policy. Deity-first; relationships
+    // plug into the same path once the Allies & Enemies table exists.
+    await materializeJoinBonds({
+      characterId: cloneId || application.character_id,
+      campaignId: application.campaign_id,
+      submittedBy: playerId,
+    }).catch((err) => {
+      // Non-fatal to the accept, but NEVER silent — log with full context so
+      // an RLS denial / missing-deity read announces itself instead of
+      // vanishing (a silent no-op here is why this failed invisibly).
+      console.error(
+        `[materializeJoinBonds] failed for character ${cloneId || application.character_id} ` +
+        `in campaign ${application.campaign_id} (non-fatal — accept proceeded):`,
+        err,
+      );
+    });
+  }
+}
+
+/**
+ * Deep-copy a player's library character into a new campaign-owned
+ * `characters` row (the clone that plays in the campaign), and repoint the
+ * application at it. The library original is untouched (campaign_id stays
+ * null). Returns the clone's id.
+ *
+ * Run by the GM (the accept action), so the clone is inserted with the
+ * player's user_id under the campaign-GM INSERT policy (the owner INSERT
+ * policy can't cover a GM inserting on a player's behalf). Idempotent: a
+ * re-accept reuses the existing clone instead of duplicating it.
+ *
+ * Child-table state (PC↔PC character_relationships, the companions table) is
+ * intentionally NOT copied — those are in-campaign play artifacts a fresh
+ * clone correctly starts without. The `creator_data` and `companions` JSONB
+ * (creator-authored) ride along on the row.
+ */
+export async function cloneCharacterForCampaign({ applicationId, sourceCharacterId, campaignId }) {
+  if (!sourceCharacterId || !campaignId) return null;
+
+  const { data: orig, error: readErr } = await supabase
+    .from("characters")
+    .select("*")
+    .eq("id", sourceCharacterId)
+    .maybeSingle();
+  if (readErr) throw readErr;
+  if (!orig) return null;
+
+  // Already a campaign copy for this campaign (re-accept after repoint):
+  // nothing to clone.
+  if (orig.campaign_id === campaignId && orig.is_campaign_copy) {
+    return orig.id;
+  }
+
+  // Idempotency: reuse an existing clone of this original for this campaign.
+  const { data: existingClone } = await supabase
+    .from("characters")
+    .select("id")
+    .eq("campaign_id", campaignId)
+    .eq("source_character_id", sourceCharacterId)
+    .maybeSingle();
+
+  let cloneId = existingClone?.id || null;
+
+  if (!cloneId) {
+    // Row shape from the shared helper (single source of truth with the
+    // lobby path) — strips identity / session-lock / timestamps and keeps
+    // user_id + created_by so the player's own-character lookup finds the
+    // clone. The INSERT runs as the GM (campaign-GM INSERT policy).
+    const { data: inserted, error: insErr } = await supabase
       .from("characters")
-      .update({ campaign_id: application.campaign_id })
-      .eq("id", application.character_id)
+      .insert(buildCampaignCloneRow(orig, { campaignId }))
+      .select("id")
+      .single();
+    if (insErr) throw insErr;
+    cloneId = inserted.id;
+  }
+
+  // Repoint the application at the clone — post-accept, "the character in
+  // this application" is the campaign instance.
+  if (applicationId) {
+    await supabase
+      .from("campaign_applications")
+      .update({ character_id: cloneId })
+      .eq("id", applicationId)
       .catch(() => { /* non-fatal */ });
   }
+
+  return cloneId;
+}
+
+/**
+ * On accept, read the joining character's `creator_data` and seed the
+ * campaign with PENDING copies of its creator-authored bonds, for the GM
+ * to accept/reject in the lobby (the Pending Approvals panel in
+ * CampaignView). The GM's auth context runs this, so the `deities` GM-write
+ * RLS policy permits the
+ * insert. Idempotent — re-accepting won't duplicate.
+ */
+export async function materializeJoinBonds({ characterId, campaignId, submittedBy }) {
+  if (!characterId || !campaignId) return;
+  const { data: char, error } = await supabase
+    .from("characters")
+    .select("creator_data")
+    .eq("id", characterId)
+    .maybeSingle();
+  if (error) throw error;
+  const creator = char?.creator_data || {};
+
+  // ── Deity (Cleric/Paladin "create-your-own") ──────────────────────────
+  // Shape: creator_data.allies.deity = { name, desc, image, presetId }.
+  const deity = creator?.allies?.deity;
+  if (deity && String(deity.name || "").trim()) {
+    await materializePlayerDeity({ campaignId, submittedBy, deity });
+  }
+
+  // ── SEAM (Phase 3b): creator_data.relationships → relationship_entities ──
+  // The free-create relationships ([{name,bio,image,type,affinity,trust}])
+  // materialize the SAME way (pending, source 'player-submitted') once the
+  // Allies & Enemies tab + relationship_entities table land. Intentionally
+  // not built here — there's no entity table to write to yet.
+}
+
+async function materializePlayerDeity({ campaignId, submittedBy, deity }) {
+  const name = String(deity.name).trim();
+  // Idempotency: skip if this player already submitted a deity by this name
+  // to this campaign (the deities table has no unique constraint for it).
+  // Supabase returns { error } rather than throwing on RLS/query failure —
+  // surface it so a denial isn't dropped silently.
+  const { data: existing, error: selErr } = await supabase
+    .from("deities")
+    .select("id")
+    .eq("campaign_id", campaignId)
+    .eq("submitted_by", submittedBy)
+    .eq("name", name)
+    .maybeSingle();
+  if (selErr) throw selErr;
+  if (existing?.id) return;
+
+  const { error: insErr } = await supabase.from("deities").insert({
+    campaign_id: campaignId,
+    name,
+    description: deity.desc || null,
+    image_url: deity.image || null,
+    source: "player-submitted",
+    approval_status: "pending",
+    submitted_by: submittedBy || null,
+    created_by: submittedBy || null,
+    discovered: true,
+  });
+  // An RLS denial / constraint failure was previously swallowed silently —
+  // throw so the caller's catch logs it with context.
+  if (insErr) throw insErr;
 }
 
 export async function rejectCharacter({ application, gmMessage }) {
@@ -269,6 +432,25 @@ export async function rejectCharacter({ application, gmMessage }) {
     .eq("id", application.id);
   if (error) throw error;
   return "rejected_character";
+}
+
+/**
+ * On kick, clear the player's ACCEPTED application for this campaign so its
+ * character_id doesn't dangle at the now-deleted clone. Re-applying
+ * (submitApplication) overwrites character_id + resets status to 'pending'
+ * regardless, so this just keeps the interim state clean (the GM's
+ * applications view and the player's inbox won't point at a deleted row).
+ * Run by the GM; non-fatal.
+ */
+export async function clearKickedApplication({ campaignId, userId }) {
+  if (!campaignId || !userId) return;
+  const { error } = await supabase
+    .from("campaign_applications")
+    .update({ character_id: null, updated_at: new Date().toISOString() })
+    .eq("campaign_id", campaignId)
+    .or(`user_id.eq.${userId},applicant_id.eq.${userId}`)
+    .eq("status", "accepted");
+  if (error) throw error;
 }
 
 export async function rejectPlayer({ application, reason = null }) {
