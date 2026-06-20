@@ -153,20 +153,33 @@ export function buildStatsFromCharacterData(characterData) {
     ],
     feature_choices: characterData.feature_choices || {},
     multiclasses: characterData.multiclasses || [],
-    // Choice audit-trail that can't be recomputed from derived stats and
-    // must survive save→reopen (M3): pre-ASI base scores, the ASI/feat
-    // selections at each milestone, and per-class multiclass skill picks.
-    // Without these, reopening collapses baseAttributes into the post-ASI
-    // attributes and empties the ASI/multiclass history, mis-recomputing
-    // the character on edit.
-    baseAttributes: characterData.baseAttributes || characterData.attributes || {},
-    asiSelections: characterData.asiSelections || {},
-    multiclassSkills: characterData.multiclassSkills || {},
-    // Equipment-selector UI state (M4) — which starting-kit options the
-    // player picked and the kit-vs-gold toggle — so the EquipmentStep
-    // selectors reflect prior choices on reopen.
-    equipment_choices: characterData.equipment_choices || {},
-    used_starting_gold: !!characterData.used_starting_gold,
+    // Every creator-only flexible field with NO external consumer lives in
+    // ONE jsonb blob (creator_data) rather than a column each — so a new
+    // creator field never needs a migration or breaks the next save. The
+    // reload path reads these back out (with a legacy v1-column fallback).
+    // Column: migrations/20271219_characters_creator_data_blob.sql.
+    //   - baseAttributes / asiSelections / multiclassSkills: ASI/multiclass
+    //     audit trail (M3) so reopening doesn't collapse baseAttributes
+    //     into post-ASI attributes.
+    //   - equipment_choices / used_starting_gold: EquipmentStep selector
+    //     state (M4).
+    //   - allies: Brief B's deity / familiar / mount / circle flavor
+    //     (allies[bondKey] = {name,desc,image,presetId}) — previously
+    //     dropped on save; now persisted here.
+    //   - relationships: the Bonds & Allies step's universal free-create
+    //     list (allies/rivals/enemies the player adds for any class) —
+    //     [{id,name,bio,image,type,affinity}]. The affinity bar is intent
+    //     only; it isn't wired to live party-panel edges yet.
+    // Cross-system `companions` stays a top-level column (below).
+    creator_data: {
+      baseAttributes: characterData.baseAttributes || characterData.attributes || {},
+      asiSelections: characterData.asiSelections || {},
+      multiclassSkills: characterData.multiclassSkills || {},
+      equipment_choices: characterData.equipment_choices || {},
+      used_starting_gold: !!characterData.used_starting_gold,
+      allies: characterData.allies || {},
+      relationships: Array.isArray(characterData.relationships) ? characterData.relationships : [],
+    },
     spells: characterData.spells || { cantrips: [], level1: [] },
     equipment: characterData.equipment || { weapons: [], armor: {} },
     currency: characterData.currency || {

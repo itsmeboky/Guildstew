@@ -8,6 +8,7 @@ import PageNotFound from './lib/PageNotFound';
 import GamePackListing from './pages/GamePackListing';
 import AdminTools from "@/pages/AdminTools";
 import DiceCalibrator from "@/pages/DiceCalibrator";
+import AlphaApprovals from "@/pages/AlphaApprovals";
 import GuildJoin from "@/pages/GuildJoin";
 import ForagerEntry from "@/maps/ui/ForagerEntry";
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -180,6 +181,11 @@ const AuthenticatedApp = () => {
       <Route path="/dice-calibrator" element={
         <ErrorBoundary resetKeys={routeResetKeys}>
           <DiceCalibrator />
+        </ErrorBoundary>
+      } />
+      <Route path="/alpha-approvals" element={
+        <ErrorBoundary resetKeys={routeResetKeys}>
+          <AlphaApprovals />
         </ErrorBoundary>
       } />
       <Route path="/maps" element={

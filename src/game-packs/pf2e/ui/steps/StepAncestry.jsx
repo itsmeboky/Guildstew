@@ -58,7 +58,12 @@ const StepAncestry = ({ data, update }) => {
       <ThumbnailStrip
         items={ANCESTRIES}
         selectedId={selected.id}
-        onSelect={id => update({ ancestry: id, heritage: null })}
+        onSelect={id => {
+          // Re-selecting the current ancestry must not null out heritage —
+          // only a genuine change runs the reset cascade.
+          if (id === data.ancestry) return;
+          update({ ancestry: id, heritage: null });
+        }}
       />
 
       {/* Detail panel */}

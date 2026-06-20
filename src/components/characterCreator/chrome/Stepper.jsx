@@ -1,7 +1,7 @@
-import React from "react";
-
-// Must mirror the STEPS array in CharacterCreator.jsx — the indicator
-// keys its highlight/click off the same indices.
+// Must mirror the ALL_STEPS array in CharacterCreator.jsx — the indicator
+// keys its highlight/click off the same indices. CharacterCreator passes its
+// per-pack filtered step list via the `steps` prop (e.g. 2024 drops the
+// 'bonds' step), so this stays the default/full 2014 set.
 export const STEP_DEFS = [
   { id: "identity", label: "Identity" },
   { id: "class", label: "Class & Path" },
@@ -9,14 +9,15 @@ export const STEP_DEFS = [
   { id: "spells", label: "Spells" },
   { id: "features", label: "Features" },
   { id: "skills", label: "Skills" },
+  { id: "bonds", label: "Bonds & Allies" },
   { id: "equipment", label: "Equipment" },
   { id: "review", label: "Review" },
 ];
 
-export function Stepper({ current, completed = [], onClick }) {
+export function Stepper({ current, completed = [], onClick, steps = STEP_DEFS }) {
   return (
     <div className="panel" style={{ padding: "20px 24px", marginBottom: 28, position: "relative" }}>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${STEP_DEFS.length}, 1fr)`, gap: 6, marginBottom: 16, position: "relative" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${steps.length}, 1fr)`, gap: 6, marginBottom: 16, position: "relative" }}>
         <div
           aria-hidden
           style={{
@@ -30,7 +31,7 @@ export function Stepper({ current, completed = [], onClick }) {
             zIndex: 0,
           }}
         />
-        {STEP_DEFS.map((s, i) => {
+        {steps.map((s, i) => {
           const isDone = completed.includes(i);
           const isActive = i === current;
           const clickable = isDone || i < current || i === current;
@@ -100,7 +101,7 @@ export function Stepper({ current, completed = [], onClick }) {
           style={{
             height: "100%",
             background: "linear-gradient(90deg, var(--orange-deep) 0%, var(--orange) 40%, var(--gold) 80%, var(--teal) 100%)",
-            width: `${((current + 1) / STEP_DEFS.length) * 100}%`,
+            width: `${((current + 1) / steps.length) * 100}%`,
             transition: "width 0.5s ease",
             boxShadow: "0 0 12px var(--orange-glow)",
           }}

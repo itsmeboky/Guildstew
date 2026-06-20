@@ -137,7 +137,12 @@ const StepClass = ({ data, update, openDeityModal }) => {
       <ThumbnailStrip
         items={CLASSES}
         selectedId={selected.id}
-        onSelect={id => update({ class: id, classFeats: {} })}
+        onSelect={id => {
+          // Re-selecting the current class must not wipe classFeats —
+          // only a genuine change runs the reset cascade.
+          if (id === data.class) return;
+          update({ class: id, classFeats: {} });
+        }}
       />
 
       <div className="relative bg-pf-bg-card border border-pf-brass-dim/30 p-6">

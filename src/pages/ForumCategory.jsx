@@ -1,11 +1,21 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import * as Icons from "lucide-react";
 import {
   ArrowLeft, Plus, Pin, Lock, MessageCircle, Eye, ChevronLeft, ChevronRight,
+  Megaphone, Lightbulb, Bug, Beaker, BookOpen, Palette, Coffee,
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
+
+// Forum category icons are data-driven (forum_categories.icon, set via a
+// free-text admin field), so they're looked up by name at runtime. We import
+// only the seeded category icons and resolve them through this map; any
+// unknown/custom admin icon name falls back to MessageCircle at the call site.
+// This replaces `import * as Icons`, which pulled the entire lucide-react icon
+// set into the eager bundle.
+const Icons = {
+  Megaphone, MessageCircle, Lightbulb, Bug, Beaker, BookOpen, Palette, Coffee,
+};
 import {
   getCategoryBySlug, listThreadsInCategory, isAdminEmail,
 } from "@/lib/forumsClient";
