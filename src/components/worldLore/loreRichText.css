@@ -1,0 +1,127 @@
+/*
+ * World Lore rich-text styling. One class — `.lore-prose` — drives both
+ * the TipTap editor content area and the saved-entry render output so
+ * what you author matches what you read back. Colors/spacing/radii pull
+ * from the World Lore surface palette already in use (no new tokens, no
+ * typography plugin, no new fonts — body text uses the app --font-body).
+ */
+.lore-prose {
+  font-family: var(--font-body);
+  color: #cbd5e1; /* slate-300 — matches existing lore body text */
+  line-height: 1.65;
+  word-break: break-word;
+}
+
+.lore-prose:focus {
+  outline: none;
+}
+
+.lore-prose p {
+  margin: 0 0 0.75rem;
+}
+.lore-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.lore-prose h1,
+.lore-prose h2,
+.lore-prose h3 {
+  color: #ffffff;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 1.25rem 0 0.5rem;
+}
+.lore-prose h1 { font-size: 1.6rem; }
+.lore-prose h2 { font-size: 1.35rem; }
+.lore-prose h3 { font-size: 1.15rem; }
+
+.lore-prose ul,
+.lore-prose ol {
+  margin: 0 0 0.75rem;
+  padding-left: 1.5rem;
+}
+.lore-prose ul { list-style: disc; }
+.lore-prose ol { list-style: decimal; }
+.lore-prose li { margin: 0.2rem 0; }
+
+.lore-prose blockquote {
+  border-left: 3px solid rgba(55, 242, 209, 0.4); /* teal #37F2D1 */
+  padding: 0.25rem 0 0.25rem 1rem;
+  margin: 0 0 0.75rem;
+  color: #94a3b8; /* slate-400 */
+  font-style: italic;
+}
+
+.lore-prose a {
+  color: #37f2d1;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.lore-prose code {
+  background: #0f1219;
+  border: 1px solid #334155; /* slate-700 */
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.9em;
+}
+.lore-prose pre {
+  background: #050816;
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin: 0 0 0.75rem;
+  overflow-x: auto;
+}
+.lore-prose pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.lore-prose hr {
+  border: 0;
+  border-top: 1px solid #334155;
+  margin: 1.25rem 0;
+}
+
+.lore-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  border: 1px solid #334155;
+  margin: 0.5rem 0;
+}
+
+.lore-prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 0.75rem;
+  overflow: hidden;
+}
+.lore-prose th,
+.lore-prose td {
+  border: 1px solid #334155;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+.lore-prose th {
+  background: #0f1219;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Selected-cell highlight while editing tables */
+.lore-prose .selectedCell {
+  background: rgba(55, 242, 209, 0.08);
+}
+
+/* Placeholder text shown on the empty editor */
+.lore-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #64748b; /* slate-500 */
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
