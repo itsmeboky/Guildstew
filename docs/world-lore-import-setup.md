@@ -35,7 +35,13 @@ below are set.
 ```
 VITE_GOOGLE_CLIENT_ID=<oauth-web-client-id>.apps.googleusercontent.com
 VITE_GOOGLE_API_KEY=<api-key>
+VITE_GOOGLE_APP_ID=<cloud-project-number>
 ```
+
+`VITE_GOOGLE_APP_ID` is the **Cloud project number** (Console home / project
+picker → "Project number"). The Picker passes it via `setAppId`; without it
+you can pick a file but the read 403s. All three vars are required for the
+"Choose from Google Drive" button to appear.
 
 ### Google Cloud setup (one-time, by the app owner)
 
