@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/select";
 import { Save, X, Upload, Lock, Languages, Plus, Trash2 } from "lucide-react";
 import { uploadFile } from "@/utils/uploadFile";
+import LoreRichTextEditor from "./LoreRichTextEditor";
+import { sanitizeLoreHtml } from "@/lib/sanitizeForumHtml";
 import { TEMPLATE_TYPES, templateById } from "@/data/worldLoreTemplates";
 import {
   ENTRY_TEMPLATES,
@@ -182,7 +184,7 @@ export default function EntryForm({
     onSave({
       id: initial?.id,
       title: title.trim(),
-      content,
+      content: sanitizeLoreHtml(content),
       template_type: templateType,
       visibility,
       visible_to_players: visibility === "selected" ? visibleTo : [],
@@ -257,13 +259,13 @@ export default function EntryForm({
         return (
           <div>
             <Label className="text-sm text-slate-300">{contentField.label}</Label>
-            <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              rows={10}
-              placeholder={contentField.placeholder || "Supports rich text / HTML."}
-              className="bg-[#0f1219] border-slate-600 text-white placeholder:text-slate-500 mt-1"
-            />
+            <div className="mt-1">
+              <LoreRichTextEditor
+                value={content}
+                onChange={setContent}
+                placeholder={contentField.placeholder || "Write whatever you want."}
+              />
+            </div>
           </div>
         );
       })()}
@@ -282,7 +284,9 @@ export default function EntryForm({
         </div>
       )}
 
-      {categoryMetadataFields.length > 0 && (
+      {/* Freeform entries are title + rich content only — category-level
+          structured fields render only for the structured templates. */}
+      {templateType !== "freeform" && categoryMetadataFields.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-[#0f1219] border border-slate-700 rounded-lg p-3">
           {categoryMetadataFields.map((field) => (
             <TemplateField
