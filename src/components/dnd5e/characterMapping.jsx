@@ -1,6 +1,5 @@
 import {
   calculateMaxHP,
-  calculateAC,
   calculateProficiencyBonus,
   getSpeed,
   calculateAbilityModifier,
@@ -9,6 +8,11 @@ import {
   getBreweryClassFeaturesAtLevel,
   getBreweryClassResource,
 } from "@/lib/breweryClassApply";
+import {
+  deriveArmorClass,
+  deriveSavingThrows,
+  deriveProficiencies,
+} from "@/components/dnd5e/deriveCharacterStats";
 
 /**
  * Build a fully-derived "stats" object from CharacterCreator's characterData.
@@ -32,7 +36,10 @@ export function buildStatsFromCharacterData(characterData) {
     conScore: attributes.con,
     multiclasses: characterData.multiclasses,
   });
-  const armor_class = calculateAC(attributes.dex);
+  // AC / saving throws / proficiencies are DERIVED here (and re-derived
+  // identically by ReviewStep) from class / race / background / attributes
+  // / inventory — never stored step-by-step, so they can't go stale.
+  const armor_class = deriveArmorClass(characterData);
   const initiative = calculateAbilityModifier(attributes.dex);
   // Brewery races override SRD-lookup basics — speed, size, and
   // darkvision come from the mod schema when _brewery_race is set
@@ -126,13 +133,11 @@ export function buildStatsFromCharacterData(characterData) {
 
     // rules/mechanics
     skills: characterData.skills || {},
-    saving_throws: characterData.saving_throws || {},
+    // Derived from the class's two proficient saves (e.g. Fighter STR/CON).
+    saving_throws: deriveSavingThrows(characterData.class),
     languages: characterData.languages || [],
-    proficiencies: characterData.proficiencies || {
-      armor: [],
-      weapons: [],
-      tools: [],
-    },
+    // Derived + aggregated from class / race / background grants, deduped.
+    proficiencies: deriveProficiencies(characterData),
     features: [
       ...((characterData.features) || []),
       ...((characterData.race_features) || []),
@@ -148,6 +153,33 @@ export function buildStatsFromCharacterData(characterData) {
     ],
     feature_choices: characterData.feature_choices || {},
     multiclasses: characterData.multiclasses || [],
+    // Every creator-only flexible field with NO external consumer lives in
+    // ONE jsonb blob (creator_data) rather than a column each — so a new
+    // creator field never needs a migration or breaks the next save. The
+    // reload path reads these back out (with a legacy v1-column fallback).
+    // Column: migrations/20271219_characters_creator_data_blob.sql.
+    //   - baseAttributes / asiSelections / multiclassSkills: ASI/multiclass
+    //     audit trail (M3) so reopening doesn't collapse baseAttributes
+    //     into post-ASI attributes.
+    //   - equipment_choices / used_starting_gold: EquipmentStep selector
+    //     state (M4).
+    //   - allies: Brief B's deity / familiar / mount / circle flavor
+    //     (allies[bondKey] = {name,desc,image,presetId}) — previously
+    //     dropped on save; now persisted here.
+    //   - relationships: the Bonds & Allies step's universal free-create
+    //     list (allies/rivals/enemies the player adds for any class) —
+    //     [{id,name,bio,image,type,affinity}]. The affinity bar is intent
+    //     only; it isn't wired to live party-panel edges yet.
+    // Cross-system `companions` stays a top-level column (below).
+    creator_data: {
+      baseAttributes: characterData.baseAttributes || characterData.attributes || {},
+      asiSelections: characterData.asiSelections || {},
+      multiclassSkills: characterData.multiclassSkills || {},
+      equipment_choices: characterData.equipment_choices || {},
+      used_starting_gold: !!characterData.used_starting_gold,
+      allies: characterData.allies || {},
+      relationships: Array.isArray(characterData.relationships) ? characterData.relationships : [],
+    },
     spells: characterData.spells || { cantrips: [], level1: [] },
     equipment: characterData.equipment || { weapons: [], armor: {} },
     currency: characterData.currency || {
@@ -159,6 +191,14 @@ export function buildStatsFromCharacterData(characterData) {
     },
     expertise: characterData.expertise || [],
     inventory: characterData.inventory || [],
+
+    // companions — the canonical rich array written by the creator's
+    // CompanionPicker (and later edited in the Party panel / GM approval
+    // flow). Without this the picked companion was silently dropped on
+    // save. The old flat companion_* fields are intentionally NOT
+    // emitted here (and the only one that ever existed as a column,
+    // companion_image, has no populated rows — nothing to migrate).
+    companions: Array.isArray(characterData.companions) ? characterData.companions : [],
 
     // fluff
     description: characterData.description || "",

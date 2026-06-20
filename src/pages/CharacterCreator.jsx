@@ -1,7 +1,7 @@
 import { useAuth } from '@/lib/AuthContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
 import { trackEvent } from '@/utils/analytics';
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { supabase } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,6 +15,7 @@ import { getSpellSlots, getPactSlots } from "@/components/dnd5e/spellData";
 import { getSkillsCompletion } from "@/components/characterCreator/skillsCompletion";
 import { getSkillsCompletion2024 } from "@/components/characterCreator/skillsCompletion2024";
 import { getSpellsCompletion } from "@/components/characterCreator/spellsCompletion";
+import { getFeaturesCompletion, isSubclassSelectionComplete } from "@/components/characterCreator/featuresCompletion";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   calculateMaxHP, 
@@ -34,6 +35,7 @@ import IdentityStep from "@/components/characterCreator/IdentityStep";
 import IdentityStep2024 from "@/components/characterCreator/IdentityStep2024";
 import ClassStep from "@/components/characterCreator/ClassStep";
 import ClassStep2024 from "@/components/characterCreator/ClassStep2024";
+import BondsAndAlliesStep from "@/components/characterCreator/BondsAndAlliesStep";
 import AbilityScoresStep from "@/components/characterCreator/AbilityScoresStep";
 import AbilitiesStep2024 from "@/components/characterCreator/AbilitiesStep2024";
 import ClassFeaturesStep from "@/components/characterCreator/ClassFeaturesStep";
@@ -58,13 +60,23 @@ import { Stepper } from "@/components/characterCreator/chrome/Stepper";
 import { StepNav } from "@/components/characterCreator/chrome/StepNav";
 import { themeForClass } from "@/data/character-creator-class-themes";
 
-const STEPS = [
+// Step order follows the dependency chain: class (level + subclass) →
+// abilities (casting modifier) → spells → features (invocations can now
+// see cantrips chosen on the Spells step) → skills → equipment → review.
+// The full 2014 step set. The component filters this per game-pack into the
+// active `STEPS` list (see `STEPS` useMemo in the component) — the
+// 'bonds' step is 2014-only and is dropped from the 2024 flow, which has no
+// Bonds & Allies step yet. STEP_DEFS in chrome/Stepper.jsx mirrors this
+// order; the component passes the filtered list to <Stepper> so the
+// indicator and the step components stay index-aligned per pack.
+const ALL_STEPS = [
   { id: 'identity', label: 'Identity', component: IdentityStep },
   { id: 'class', label: 'Class & Path', component: ClassStep },
   { id: 'abilities', label: 'Abilities', component: AbilityScoresStep },
+  { id: 'spells', label: 'Spells', component: SpellsStep },
   { id: 'features', label: 'Features', component: ClassFeaturesStep },
   { id: 'skills', label: 'Skills', component: SkillsStep },
-  { id: 'spells', label: 'Spells', component: SpellsStep },
+  { id: 'bonds', label: 'Bonds & Allies', component: BondsAndAlliesStep },
   { id: 'equipment', label: 'Equipment', component: EquipmentStep },
   { id: 'review', label: 'Review', component: ReviewStep }
 ];
@@ -196,9 +208,26 @@ export default function CharacterCreator() {
     appearance: {},
     description: "",
     expertise: [], // Added for passive perception calculation
+    // Class-gated bond flavor (deity/patron/familiar/circle), keyed by
+    // bond key. Free-create relationships (allies/rivals/enemies) the
+    // player adds on the Bonds & Allies step. Both persist inside the
+    // creator_data jsonb blob; relationships survive a class change.
+    allies: {},
+    relationships: [],
   });
 
   const previousClassRef = useRef(characterData.class);
+
+  // Active step list for this game pack. The Bonds & Allies step ships for
+  // 2014 only; 2024 keeps its existing flow (a 2024 bonds step is a separate
+  // task) so it's filtered out, keeping the 2024 nav indices unchanged. Every
+  // in-component reference to STEPS (validation, nav, the per-step dispatch,
+  // and the <Stepper> it's passed to) reads this filtered list, so indices
+  // stay correct for each pack.
+  const STEPS = useMemo(
+    () => ALL_STEPS.filter((s) => !(s.id === 'bonds' && characterData.gamePack === 'dnd5e_2024')),
+    [characterData.gamePack],
+  );
 
   // Mandatory edit-pass: load the campaign's ban list and recompute
   // violations live as the player edits. Only runs in
@@ -263,13 +292,18 @@ export default function CharacterCreator() {
         const persistedPack =
           existingCharacter.game_pack === 'dnd5e' ? 'dnd5e_2014'
             : existingCharacter.game_pack || 'dnd5e_2014';
+        // Creator-only flexible fields now live in the `creator_data` jsonb
+        // blob (see buildStatsFromCharacterData). Fall back to the legacy
+        // v1 top-level snake columns, then to defaults, so characters
+        // saved under v1 still reopen intact.
+        const creatorData = existingCharacter.creator_data || {};
         setCharacterData(prev => ({
           ...prev,
           ...existingCharacter,
           gamePack: persistedPack,
           game_pack: persistedPack,
           attributes: existingCharacter.attributes || prev.attributes,
-          baseAttributes: existingCharacter.baseAttributes || existingCharacter.attributes || prev.baseAttributes,
+          baseAttributes: creatorData.baseAttributes || existingCharacter.base_attributes || existingCharacter.attributes || prev.baseAttributes,
           skills: existingCharacter.skills || prev.skills,
           spells: existingCharacter.spells || prev.spells,
           saving_throws: existingCharacter.saving_throws || prev.saving_throws,
@@ -278,10 +312,20 @@ export default function CharacterCreator() {
           features: existingCharacter.features || prev.features,
           feature_choices: existingCharacter.feature_choices || prev.feature_choices,
           multiclasses: existingCharacter.multiclasses || prev.multiclasses,
-          multiclassSkills: existingCharacter.multiclassSkills || prev.multiclassSkills,
-          asiSelections: existingCharacter.asiSelections || prev.asiSelections,
+          multiclassSkills: creatorData.multiclassSkills || existingCharacter.multiclass_skills || prev.multiclassSkills,
+          asiSelections: creatorData.asiSelections || existingCharacter.asi_selections || prev.asiSelections,
+          // Brief B's deity/familiar/mount/circle flavor — rehydrated from
+          // the blob (no v1 column ever existed for it).
+          allies: creatorData.allies || existingCharacter.allies || prev.allies || {},
+          // Free-create relationships from the Bonds & Allies step — also
+          // in the blob; fall back to a column read then default.
+          relationships: creatorData.relationships || existingCharacter.relationships || prev.relationships || [],
           inventory: existingCharacter.inventory || prev.inventory,
           equipment: existingCharacter.equipment || prev.equipment,
+          // Equipment-selector UI state (M4) so the EquipmentStep
+          // selectors reflect prior picks on reopen.
+          equipment_choices: creatorData.equipment_choices || existingCharacter.equipment_choices || prev.equipment_choices,
+          used_starting_gold: creatorData.used_starting_gold ?? existingCharacter.used_starting_gold ?? prev.used_starting_gold,
           currency: existingCharacter.currency || prev.currency,
           personality: existingCharacter.personality || prev.personality,
           appearance: existingCharacter.appearance || prev.appearance,
@@ -330,15 +374,28 @@ export default function CharacterCreator() {
         race: characterData.race,
         subrace: characterData.subrace,
         background: characterData.background,
-        level: characterData.level
+        level: characterData.level,
+        // Imagery is chosen on the Identity step (before class) — preserve
+        // portrait + token (and their framing) across a class change so a
+        // re-pick doesn't blank the character's picture.
+        avatar_url: characterData.avatar_url || "",
+        profile_avatar_url: characterData.profile_avatar_url || "",
+        avatar_position: characterData.avatar_position || { x: 0, y: 0 },
+        avatar_zoom: characterData.avatar_zoom || 1,
+        profile_position: characterData.profile_position || { x: 0, y: 0 },
+        profile_zoom: characterData.profile_zoom || 1,
+        // Free-create relationships are class-independent — a backstory
+        // rival shouldn't vanish when the player re-picks their class.
+        // (Gated bonds in `allies` are deliberately NOT carried: they're
+        // re-derived from the new class on the Bonds & Allies step.)
+        relationships: characterData.relationships || [],
       };
-      
+
       setCharacterData({
         ...step1Data,
         class: characterData.class,
         subclass: "",
         alignment: "True Neutral",
-        avatar_url: "",
         attributes: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
         skills: {},
         spells: { cantrips: [], level1: [] },
@@ -558,7 +615,12 @@ export default function CharacterCreator() {
         }
         return characterData.name && characterData.race && characterData.background && characterData.alignment;
       case 'class':
-        return !!characterData.class;
+        // A class is required; a subclass is required only once the
+        // character's level qualifies for one (Cleric/Sorcerer/Warlock
+        // at 1, Wizard/Druid at 2, the rest at 3). A level-1 Fighter
+        // advances with no subclass; a level-3 Fighter must pick one.
+        if (characterData.gamePack === 'dnd5e_2024') return !!characterData.class;
+        return !!characterData.class && isSubclassSelectionComplete(characterData);
       case 'abilities':
         // Effective post-racial / post-ASI scores cap at 20 per RAW
         // (PHB p. 15). The base-score caps (rolled / point-buy /
@@ -569,7 +631,11 @@ export default function CharacterCreator() {
         // get rejected at the gate.
         return Object.values(characterData.attributes).every(val => val >= 3 && val <= 20);
       case 'features':
-        return true;
+        // Every mandatory choiceRequired pick (Fighting Style, Metamagic,
+        // Pact Boon, Eldritch Invocations, Mystic Arcanum) must be resolved
+        // before advancing. 2024 keeps its own flow.
+        if (characterData.gamePack === 'dnd5e_2024') return true;
+        return getFeaturesCompletion(characterData).isComplete;
       case 'skills':
         // 2024 reads from its own SRD-driven completion helper —
         // background skills come from AbilitiesStep2024's selection,
@@ -610,6 +676,10 @@ export default function CharacterCreator() {
         // Bard / Cleric / Druid / Warlock / Wizard at L1, leaving
         // every prepared/known caster stuck on this step.
         return getSpellsCompletion(characterData).isComplete;
+      case 'bonds':
+        // Bonds & Allies is all optional flavor (gated bonds + free-create
+        // relationships) — nothing gates progress.
+        return true;
       case 'equipment':
         return true;
       case 'review':
@@ -636,9 +706,15 @@ export default function CharacterCreator() {
         return 'Complete the identity fields';
       case 'class':
         if (!characterData.class) return 'Pick a class';
-        return 'Pick a class';
+        return 'Choose your subclass';
       case 'abilities':
         return 'Set every ability score between 3 and 20';
+      case 'features': {
+        const missing = getFeaturesCompletion(characterData).missing;
+        return missing.length
+          ? `Resolve: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '…' : ''}`
+          : 'Resolve all required choices';
+      }
       case 'skills':
         return 'Finish your skill picks';
       case 'spells':
@@ -1024,6 +1100,7 @@ const handleSubmit = () => {
           current={currentStep}
           completed={completedSteps}
           onClick={handleStepClick}
+          steps={STEPS}
         />
 
         <div key={currentStep} className="step-content" style={{ marginBottom: 6 }}>

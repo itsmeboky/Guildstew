@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
+import { resolveFeatureChoices } from "@/components/characterCreator/featureChoiceResolver";
+import { isSubclassFeature, getFeaturesCompletion } from "@/components/characterCreator/featuresCompletion";
 import SubclassPicker from "@/components/characterCreator/SubclassPicker";
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
@@ -28,29 +30,6 @@ import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 import { Primer } from "@/components/characterCreator/chrome/Primer";
 import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
 import { CharacterSummary } from "@/components/characterCreator/chrome/CharacterSummary";
-
-// Canonical "choose your specialization" feature names per class.
-// When a feature's name lands in this set, render the arrow-pattern
-// SubclassPicker instead of the legacy Select dropdown.
-const SUBCLASS_FEATURE_NAMES = new Set([
-  "Primal Path",
-  "Bard College",
-  "Divine Domain",
-  "Druid Circle",
-  "Martial Archetype",
-  "Monastic Tradition",
-  "Sacred Oath",
-  "Ranger Archetype",
-  "Ranger Conclave",
-  "Roguish Archetype",
-  "Sorcerous Origin",
-  "Otherworldly Patron",
-  "Arcane Tradition",
-]);
-
-function isSubclassFeature(feature) {
-  return !!feature?.choiceRequired && SUBCLASS_FEATURE_NAMES.has(feature?.name);
-}
 
 const AVAILABLE_CLASSES = [
   "Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk",
@@ -101,19 +80,6 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
     });
   }, [characterData.class, primaryAsiLevels.length]);
 
-  const handleLevelChange = (newLevel) => {
-    const lvl = Math.max(1, Math.min(20, Number(newLevel) || 1));
-    const totalMc = multiclasses.reduce((sum, mc) => sum + (mc.level || 0), 0);
-    const clampedMcs = totalMc > lvl - 1
-      ? multiclasses.map((mc) => ({ ...mc, level: 0 })).filter(() => false)
-      : multiclasses;
-    if (clampedMcs !== multiclasses) setMulticlasses(clampedMcs);
-    updateCharacterData({
-      level: lvl,
-      ...(clampedMcs !== multiclasses ? { multiclasses: clampedMcs } : {}),
-    });
-  };
-
   const handleAsiChange = (level, nextSelection) => {
     const key = asiKey(characterData.class, level);
     setAsiSelections((current) => {
@@ -129,10 +95,22 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
   const primaryPrereqDesc = multiclassPrereqDescription(characterData.class);
   const canMulticlass = totalLevel >= 2 && primaryClassLevel >= 1 && primaryPrereqMet;
 
-  const primaryFeatures = getClassFeaturesForLevel(characterData.class, primaryClassLevel) || [];
+  // Subclass is now SELECTED on the Class step (gated by level). The
+  // Features step still DELIVERS subclass features (Frenzy@3, etc. — those
+  // are separate per-level entries), but the subclass-selection prompt
+  // itself is filtered out here so subclass isn't chosen in two places.
+  const primaryFeatures = resolveFeatureChoices(
+    getClassFeaturesForLevel(characterData.class, primaryClassLevel) || [],
+    characterData,
+    primaryClassLevel,
+  ).filter((f) => !isSubclassFeature(f));
   const multiclassFeatures = multiclasses.flatMap((mc) => {
     if (!mc.class || !mc.level) return [];
-    const features = getClassFeaturesForLevel(mc.class, mc.level) || [];
+    const features = resolveFeatureChoices(
+      getClassFeaturesForLevel(mc.class, mc.level) || [],
+      characterData,
+      mc.level,
+    );
     return features.map((f) => ({ ...f, multiclass: mc.class }));
   });
   const allFeatures = [...primaryFeatures, ...multiclassFeatures];
@@ -168,11 +146,8 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
     updateCharacterData({ feature_choices: newChoices });
   };
 
-  const requiredChoices = allFeatures.filter((f) => f.choiceRequired);
-  const allChoicesMade = requiredChoices.every((f) => {
-    const key = `${f.multiclass || characterData.class}-${f.level}-${f.name}`;
-    return featureChoices[key];
-  });
+  // Shared with CharacterCreator's Features gate — banner and gate agree.
+  const featuresComplete = getFeaturesCompletion(characterData).isComplete;
 
   if (!characterData.class) {
     return (
@@ -223,14 +198,6 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
       >
         {/* LEFT — features tome */}
         <div className="tome" style={{ padding: '32px 36px' }}>
-          <LevelPicker
-            totalLevel={totalLevel}
-            primaryClassName={characterData.class}
-            primaryClassLevel={primaryClassLevel}
-            multiclasses={multiclasses}
-            onChange={handleLevelChange}
-          />
-
           {primaryAsiLevels.length > 0 && (
             <>
               <FleurDivider />
@@ -380,7 +347,7 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
             </>
           )}
 
-          {requiredChoices.length > 0 && !allChoicesMade && (
+          {!featuresComplete && (
             <RequiredChoicesBanner />
           )}
         </div>
@@ -401,58 +368,6 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
             characterClass={characterData.class}
             currentLevel={primaryClassLevel}
           />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Level picker — top section of the tome
-// ============================================================================
-function LevelPicker({ totalLevel, primaryClassName, primaryClassLevel, multiclasses, onChange }) {
-  return (
-    <div>
-      <OrnateHeading>The Ledger</OrnateHeading>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-        }}
-      >
-        <div className="label" style={{ color: 'var(--text-dim)' }}>
-          Character Level
-        </div>
-        <select
-          value={String(totalLevel)}
-          onChange={(e) => onChange(e.target.value)}
-          className="input"
-          style={{
-            width: 110,
-            textAlign: 'center',
-            fontSize: 16,
-            fontWeight: 700,
-            fontFamily: 'var(--display)',
-          }}
-        >
-          {Array.from({ length: 20 }, (_, i) => i + 1).map((l) => (
-            <option key={l} value={String(l)}>Level {l}</option>
-          ))}
-        </select>
-        <div
-          className="italic-serif"
-          style={{ fontSize: 13, color: 'var(--text-dim)' }}
-        >
-          {primaryClassName}{' '}
-          <span style={{ color: 'var(--teal)', fontWeight: 700 }}>L{primaryClassLevel}</span>
-          {multiclasses.filter((mc) => mc.class).length > 0 && (
-            <span style={{ marginLeft: 6, color: 'var(--text-faint)' }}>
-              (total − multiclass levels)
-            </span>
-          )}
         </div>
       </div>
     </div>
@@ -780,7 +695,11 @@ function MulticlassPanel({
       {mc.class && mc.level && <MulticlassProficienciesPanel className={mc.class} />}
 
       {mc.class && mc.level && (() => {
-        const mcFeatures = getClassFeaturesForLevel(mc.class, mc.level) || [];
+        const mcFeatures = resolveFeatureChoices(
+          getClassFeaturesForLevel(mc.class, mc.level) || [],
+          characterData,
+          mc.level,
+        );
         const mcAccent = CLASS_ACCENT[mc.class] || ACCENT_FALLBACK;
         return (
           <>

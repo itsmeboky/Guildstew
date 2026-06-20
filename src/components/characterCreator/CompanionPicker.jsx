@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Shield, Heart, Wind, Upload, Sparkles, Check, PenLine, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,12 @@ import { resolveCompanionContext } from "@/config/companionCatalog";
  * Chain upgrades).
  *
  * Persistence shape: writes the first (and, for now, only) companion
- * onto `characterData.companions[0]`. The legacy freeform fields
- * (`companion_name`, `companion_image`, `companion_background`) still
- * mirror the same data so any existing code that reads them keeps
- * working.
+ * onto `characterData.companions[0]` — the canonical rich array. The
+ * picker used to also mirror flat `companion_name` /
+ * `companion_background` fields, but those columns never existed on the
+ * `characters` table (only an orphaned `companion_image` text column
+ * does, and it has no populated rows), so the mirror is gone and there
+ * is no legacy flat data to back-fill.
  *
  * Custom companions:
  *   { id: 'custom', is_custom: true, needs_gm_approval: true, name,
@@ -41,6 +43,7 @@ export default function CompanionPicker({ characterData, updateCharacterData, ca
     className: characterData.class,
     subclass: characterData.subclass,
     pactBoon,
+    level: characterData.level,
   });
   const current = Array.isArray(characterData.companions) && characterData.companions[0]
     ? characterData.companions[0]
@@ -110,12 +113,7 @@ export default function CompanionPicker({ characterData, updateCharacterData, ca
       is_custom: false,
       needs_gm_approval: false,
     };
-    updateCharacterData({
-      companions: [next],
-      companion_name: next.name,
-      companion_image: next.image,
-      companion_background: current?.companion_background || "",
-    });
+    updateCharacterData({ companions: [next] });
   };
 
   const pickCustom = () => {
@@ -134,22 +132,13 @@ export default function CompanionPicker({ characterData, updateCharacterData, ca
       hp: null,
       speed: null,
     };
-    updateCharacterData({
-      companions: [blank],
-      companion_name: "",
-      companion_image: null,
-      companion_background: "",
-    });
+    updateCharacterData({ companions: [blank] });
   };
 
   const updateCurrent = (patch) => {
     if (!current) return;
     const merged = { ...current, ...patch };
-    updateCharacterData({
-      companions: [merged],
-      companion_name: merged.name ?? current.name,
-      companion_image: merged.image ?? current.image,
-    });
+    updateCharacterData({ companions: [merged] });
   };
 
   const uploadPortrait = async (file) => {

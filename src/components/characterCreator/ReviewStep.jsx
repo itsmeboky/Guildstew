@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { User } from "lucide-react";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import { spellDetails } from "@/components/dnd5e/spellData";
@@ -6,11 +6,22 @@ import {
   abilityModifier,
   proficiencyBonus,
   CLASS_SAVING_THROWS,
+  getRaceLanguages,
+  ALL_LANGUAGES,
 } from '@/components/dnd5e/dnd5eRules';
+import { getBackgroundLanguages } from "@/components/dnd5e/backgroundData";
 import { calculateMaxHP } from "@/components/dnd5e/characterCalculations";
+import { deriveArmorClass } from "@/components/dnd5e/deriveCharacterStats";
 import { safeText } from "@/utils/safeRender";
 import CompanionCard from "@/components/characters/CompanionCard";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { bondsForClass } from "@/components/characterCreator/bondsSections";
+import { CLASSES_DATA } from "@/components/characterCreator/ClassStep";
+import {
+  RELATIONSHIP_TYPES,
+  typeMeta,
+  bandColor,
+} from "@/components/characterCreator/BondsAndAlliesStep";
 
 // Per-class portrait icons used by the ribbon under the hero card.
 // Mirrors the table that lives on ClassStep — dropped to a flat
@@ -119,15 +130,15 @@ export default function ReviewStep({ characterData }) {
   const [hoveredItem, setHoveredItem] = useState(null);
 
   const profBonus = proficiencyBonus(characterData.level);
-  const conMod = abilityModifier(characterData.attributes?.con || 10);
-  const dexMod = abilityModifier(characterData.attributes?.dex || 10);
   const maxHP = calculateMaxHP({
     class: characterData.class,
     level: characterData.level,
     conScore: characterData.attributes?.con,
     multiclasses: characterData.multiclasses,
   });
-  const ac = 10 + dexMod;
+  // Same derivation the save builder uses, so Review and the saved
+  // payload always agree on AC.
+  const ac = deriveArmorClass(characterData);
 
   const primaryClassLevel =
     (characterData.level || 1) -
@@ -399,20 +410,15 @@ export default function ReviewStep({ characterData }) {
                 </div>
               ))}
             </div>
-            {Array.isArray(characterData.languages) && characterData.languages.length > 0 && (
-              <div
-                className="italic-serif"
-                style={{
-                  fontSize: 12,
-                  color: 'var(--text-faint)',
-                  marginTop: 10,
-                }}
-              >
-                Languages: {characterData.languages.join(', ')}
-              </div>
-            )}
           </ReviewCard>
         )}
+
+        {/* Languages get their own card so they always show (not just for
+            races with traits) and read clearly, matching the other recap
+            cards rather than a buried footnote. It also flags any unfilled
+            choice slots — e.g. after a class change reset the picks are
+            cleared, and this is where the player is told to go re-pick. */}
+        <LanguagesReviewCard characterData={characterData} />
 
         <SpellbookReviewCard
           spells={characterData.spells || {}}
@@ -490,6 +496,8 @@ export default function ReviewStep({ characterData }) {
         )}
 
         <CompanionsReviewCard characterData={characterData} />
+
+        <BondsReviewCard characterData={characterData} />
 
         {Array.isArray(characterData.inventory) && characterData.inventory.length > 0 && (
           <ReviewCard title={`Equipment · ${characterData.inventory.length}`} icon="🎒">
@@ -1028,6 +1036,58 @@ function SpellTooltip({ name, info, accent }) {
 }
 
 // ============================================================================
+// Languages card — known (granted + chosen) plus a callout for any unfilled
+// choice slots. Slots are re-derived from race / subrace / background here so
+// the recap can warn the player to go pick — important after a class change,
+// which resets the chosen languages.
+// ============================================================================
+function LanguagesReviewCard({ characterData }) {
+  const langs = Array.isArray(characterData.languages) ? characterData.languages : [];
+  const { fixed: granted, choices: raceChoices } = getRaceLanguages(
+    characterData.race,
+    characterData.subrace,
+  );
+  const totalSlots = raceChoices + (getBackgroundLanguages(characterData.background) || 0);
+  const picked = langs.filter((l) => !granted.includes(l) && ALL_LANGUAGES.includes(l)).length;
+  const left = Math.max(0, totalSlots - picked);
+
+  if (langs.length === 0 && totalSlots === 0) return null;
+
+  return (
+    <ReviewCard title={`Languages · ${langs.length}`} icon="🗣️">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {langs.map((lang) => (
+          <span key={lang} className="chip chip-gold" style={{ fontSize: 12 }}>
+            {safeText(lang)}
+          </span>
+        ))}
+      </div>
+      {left > 0 && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: '8px 12px',
+            borderRadius: 6,
+            background: 'rgba(255, 83, 0, 0.10)',
+            border: '1px solid var(--orange-soft)',
+            color: 'var(--orange-soft)',
+            fontSize: 12.5,
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 14 }}>⚠</span>
+          You still have {left} language{left === 1 ? '' : 's'} to choose — hop back to
+          “Skills &amp; Languages” to pick {left === 1 ? 'it' : 'them'}.
+        </div>
+      )}
+    </ReviewCard>
+  );
+}
+
+// ============================================================================
 // Companions card — falls back to legacy companion_* fields when needed
 // ============================================================================
 function CompanionsReviewCard({ characterData }) {
@@ -1053,5 +1113,177 @@ function CompanionsReviewCard({ characterData }) {
         ))}
       </div>
     </ReviewCard>
+  );
+}
+
+// ============================================================================
+// Bonds & Allies recap — the class-gated bonds (patron / deity / circle /
+// mount) plus the free-create relationships. Familiars are shown by the
+// Companions card above, so companion-picker sections are skipped here.
+// Mirrors the gated-bond rendering from the Bonds & Allies step.
+// ============================================================================
+const TYPE_LABELS = Object.fromEntries(RELATIONSHIP_TYPES.map((t) => [t.value, t.label]));
+
+function BondsReviewCard({ characterData }) {
+  const cls =
+    (CLASSES_DATA || []).find((c) => c.name === characterData.class) ||
+    (characterData.class ? { name: characterData.class } : null);
+  const sections = cls ? bondsForClass(cls, characterData) : [];
+  const allies = characterData.allies || {};
+
+  // Class-gated bond lines, in the order bondsForClass emits them.
+  const bondLines = [];
+  for (const s of sections) {
+    if (s.type === "patron") {
+      // A Warlock's patron (subclass) is mandatory — always show it. Same
+      // resolution as the bonds step's PatronReadout: subclass, else the
+      // sole SRD patron, else the patron type. No "unchosen" state.
+      const sole = cls?.subclasses?.length === 1 ? cls.subclasses[0]?.name : null;
+      bondLines.push({
+        key: s.key,
+        label: "Patron",
+        name: characterData.subclass || sole || "Otherworldly Patron",
+      });
+    } else if (s.type === "flavor") {
+      const a = allies[s.key] || {};
+      if (a.name || a.desc || a.image) {
+        bondLines.push({ key: s.key, label: s.label, name: a.name, bio: a.desc, image: a.image });
+      }
+    } else if (s.type === "mount-flag") {
+      bondLines.push({ key: s.key, label: "Celestial Mount", name: "Summoned with Find Steed" });
+    }
+    // companion-picker → rendered by CompanionsReviewCard above.
+  }
+
+  const relationships = Array.isArray(characterData.relationships)
+    ? characterData.relationships.filter((r) => r && (r.name || r.bio || r.image))
+    : [];
+
+  if (bondLines.length === 0 && relationships.length === 0) return null;
+
+  return (
+    <ReviewCard title="Bonds & Allies" icon="🤝">
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {bondLines.map((b) => (
+          <BondLineRow key={b.key} bond={b} />
+        ))}
+        {relationships.map((rel, i) => (
+          <RelationshipReviewRow key={rel.id || i} rel={rel} />
+        ))}
+      </div>
+    </ReviewCard>
+  );
+}
+
+function BondLineRow({ bond }) {
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+      {bond.image && (
+        <img
+          src={bond.image}
+          alt=""
+          style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+        />
+      )}
+      <div style={{ minWidth: 0 }}>
+        <div className="label" style={{ color: "var(--gold)", marginBottom: 2 }}>{bond.label}</div>
+        <div className="display" style={{ fontSize: 16, color: "var(--text)" }}>
+          {safeText(bond.name) || <span style={{ color: "var(--text-faint)" }}>—</span>}
+        </div>
+        {bond.bio && <BioScroll text={bond.bio} />}
+      </div>
+    </div>
+  );
+}
+
+function RelationshipReviewRow({ rel }) {
+  const meta = typeMeta(rel.type);
+  const Icon = meta.Icon;
+  const affinity = Math.max(0, Math.min(100, Number(rel.affinity ?? 50)));
+  const trust = Math.max(0, Math.min(100, Number(rel.trust ?? 50)));
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+      {/* type-ringed avatar — image if set, else the type icon */}
+      <div style={{ flexShrink: 0, padding: 3, borderRadius: 10, background: meta.ring }}>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 7,
+            overflow: "hidden",
+            background: rel.image ? `url(${rel.image}) center/cover` : "var(--page-bg-1, #0B131C)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: meta.color,
+          }}
+        >
+          {!rel.image && <Icon className="w-5 h-5" strokeWidth={2.2} />}
+        </div>
+      </div>
+
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <span className="display" style={{ fontSize: 16, color: "var(--text)" }}>
+            {safeText(rel.name) || "Unnamed"}
+          </span>
+          <span
+            className="chip"
+            style={{ fontSize: 10, padding: "1px 7px", color: meta.color, borderColor: meta.color }}
+          >
+            {TYPE_LABELS[rel.type] || "Ally"}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+          <MiniBar label="Affinity" value={affinity} />
+          <MiniBar label="Trust" value={trust} />
+        </div>
+        {rel.bio && <BioScroll text={rel.bio} />}
+      </div>
+    </div>
+  );
+}
+
+function MiniBar({ label, value }) {
+  const c = bandColor(value);
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, marginBottom: 3 }}>
+        <span style={{ color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: 1 }}>{label}</span>
+        <span style={{ color: c, fontWeight: 700 }}>{value}</span>
+      </div>
+      <div
+        style={{
+          height: 5,
+          borderRadius: 999,
+          background: "rgba(20,12,8,0.6)",
+          overflow: "hidden",
+          border: "1px solid var(--border-faint)",
+        }}
+      >
+        <div style={{ height: "100%", width: `${value}%`, background: `linear-gradient(90deg, ${c}99, ${c})` }} />
+      </div>
+    </div>
+  );
+}
+
+// Read-only bio in a fixed-max-height scroll box so a long bio can't blow
+// out the recap layout (mirrors the in-field cap on the cards themselves).
+function BioScroll({ text }) {
+  return (
+    <p
+      className="italic-serif"
+      style={{
+        fontSize: 13,
+        color: "var(--text-dim)",
+        lineHeight: 1.5,
+        margin: "6px 0 0",
+        whiteSpace: "pre-wrap",
+        maxHeight: 84,
+        overflowY: "auto",
+      }}
+    >
+      {safeText(text)}
+    </p>
   );
 }

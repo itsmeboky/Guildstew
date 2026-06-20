@@ -285,10 +285,8 @@ export const spellIcons = {
   "Blade Ward": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/3388647d3_Bladeward.png",
   "Friends": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/fc0d8a6cb_Friends.png",
   "Thorn Whip": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/02a5ff734_ThornWhip.png",
-  "Tasha's Hideous Laughter": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/a850a6be9_Tasha_sHideousLaughter.png",
   "Hail of Thorns": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/b9cfdc9e9_HailofThorns.png",
   "Arms of Hadar": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/a77688d9f_ArmsofHadar.png",
-  "Tenser's Floating Disk": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/dd8409e0d_TensersFloatingDisk.png",
   "Floating Disk": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/02dd51126_FloatingDisk.png",
   "Find Steed": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/2f6e70d2e_FindSteed.png",
   "Continual Flame": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/8763bde3a_ContinualFlame.png",
@@ -371,7 +369,7 @@ export async function fetchAllSpells(campaignId) {
 export const spellsByClass = {
   Bard: {
     cantrips: ["Blade Ward", "Dancing Lights", "Friends", "Light", "Mage Hand", "Mending", "Message", "Minor Illusion", "Prestidigitation", "True Strike", "Vicious Mockery"],
-    level1: ["Animal Friendship", "Bane", "Charm Person", "Comprehend Languages", "Cure Wounds", "Detect Magic", "Disguise Self", "Dissonant Whispers", "Faerie Fire", "Feather Fall", "Healing Word", "Heroism", "Identify", "Illusory Script", "Longstrider", "Silent Image", "Sleep", "Speak with Animals", "Tasha's Hideous Laughter", "Thunderwave", "Unseen Servant"]
+    level1: ["Animal Friendship", "Bane", "Charm Person", "Comprehend Languages", "Cure Wounds", "Detect Magic", "Disguise Self", "Dissonant Whispers", "Faerie Fire", "Feather Fall", "Healing Word", "Heroism", "Identify", "Illusory Script", "Longstrider", "Silent Image", "Sleep", "Speak with Animals", "Hideous Laughter", "Thunderwave", "Unseen Servant"]
   },
   Cleric: {
     cantrips: ["Guidance", "Light", "Mending", "Resistance", "Sacred Flame", "Spare the Dying", "Thaumaturgy"],
@@ -391,7 +389,7 @@ export const spellsByClass = {
   },
   Wizard: {
     cantrips: ["Acid Splash", "Blade Ward", "Chill Touch", "Dancing Lights", "Fire Bolt", "Friends", "Light", "Mage Hand", "Mending", "Message", "Minor Illusion", "Poison Spray", "Prestidigitation", "Ray of Frost", "Shocking Grasp", "True Strike"],
-    level1: ["Alarm", "Burning Hands", "Charm Person", "Chromatic Orb", "Color Spray", "Comprehend Languages", "Detect Magic", "Disguise Self", "Expeditious Retreat", "False Life", "Feather Fall", "Find Familiar", "Fog Cloud", "Grease", "Identify", "Illusory Script", "Jump", "Longstrider", "Mage Armor", "Magic Missile", "Protection from Evil and Good", "Ray of Sickness", "Shield", "Silent Image", "Sleep", "Tasha's Hideous Laughter", "Tenser's Floating Disk", "Thunderwave", "Unseen Servant", "Witch Bolt"]
+    level1: ["Alarm", "Burning Hands", "Charm Person", "Chromatic Orb", "Color Spray", "Comprehend Languages", "Detect Magic", "Disguise Self", "Expeditious Retreat", "False Life", "Feather Fall", "Find Familiar", "Fog Cloud", "Grease", "Identify", "Illusory Script", "Jump", "Longstrider", "Mage Armor", "Magic Missile", "Protection from Evil and Good", "Ray of Sickness", "Shield", "Silent Image", "Sleep", "Hideous Laughter", "Floating Disk", "Thunderwave", "Unseen Servant", "Witch Bolt"]
   },
   Paladin: {
     cantrips: [],
@@ -440,7 +438,7 @@ export const recommendedSpells = {
     level3: ["Hypnotic Pattern", "Dispel Magic", "Major Image"],
     level4: ["Dimension Door", "Polymorph", "Greater Invisibility"],
     level5: ["Greater Restoration", "Hold Monster", "Mass Cure Wounds"],
-    level6: ["Otto's Irresistible Dance", "Mass Suggestion"],
+    level6: ["Irresistible Dance", "Mass Suggestion"],
     level7: ["Teleport", "Forcecage"],
     level8: ["Dominate Monster"],
     level9: ["Power Word Kill"],
@@ -599,8 +597,8 @@ export const spellDetails = {
   "Silent Image": { level: "1st-level", school: "Illusion", castingTime: "1 action", range: "60 feet", components: "V, S, M", duration: "Concentration, up to 10 minutes", description: "Creates a visual illusion that you can move and make look as if it's moving naturally.", effects: [] },
   "Sleep": { level: "1st-level", school: "Enchantment", castingTime: "1 action", range: "90 feet", components: "V, S, M", duration: "1 minute", description: "5d8 hit points of creatures are put to sleep. Upcasting adds +2d8 HP of targets per level.", effects: ["Unconscious"] },
   "Speak with Animals": { level: "1st-level", school: "Divination", castingTime: "1 action", range: "Self", components: "V, S", duration: "10 minutes", description: "You can speak and verbally communicate with beasts for the duration.", effects: [] },
-  "Tasha's Hideous Laughter": { level: "1st-level", school: "Enchantment", castingTime: "1 action", range: "30 feet", components: "V, S, M", duration: "Concentration, up to 1 minute", description: "Target falls prone and is incapacitated, unable to stand. Wis save prevents. Each turn and when damaged, target can make fresh Wis save.", effects: ["Prone", "Incapacitated"] },
-  "Tenser's Floating Disk": { level: "1st-level", school: "Conjuration", castingTime: "1 action", range: "30 feet", components: "V, S, M", duration: "1 hour", description: "3' diameter floating disk carries up to 500lbs and follows you at a distance of 20'.", effects: [] },
+  "Hideous Laughter": { level: "1st-level", school: "Enchantment", castingTime: "1 action", range: "30 feet", components: "V, S, M", duration: "Concentration, up to 1 minute", description: "Target falls prone and is incapacitated, unable to stand. Wis save prevents. Each turn and when damaged, target can make fresh Wis save.", effects: ["Prone", "Incapacitated"] },
+  "Floating Disk": { level: "1st-level", school: "Conjuration", castingTime: "1 action", range: "30 feet", components: "V, S, M", duration: "1 hour", description: "3' diameter floating disk carries up to 500lbs and follows you at a distance of 20'.", effects: [] },
   "Thunderous Smite": { level: "1st-level", school: "Evocation", castingTime: "1 bonus action", range: "Self", components: "V", duration: "Concentration, up to 1 minute", description: "Next attack deals 2d6 thunder damage to the target and pushes it 10' away, knocking it prone. Str save prevents effect but not damage.", effects: ["Prone"] },
   "Thunderwave": { level: "1st-level", school: "Evocation", castingTime: "1 action", range: "Self", components: "V, S", duration: "Instantaneous", description: "Those within 15' take 2d8 thunder damage and are pushed 10' away. Con save halves damage and prevents push. Upcasting increases damage by +1d8 per level.", effects: [] },
   "Unseen Servant": { level: "1st-level", school: "Conjuration", castingTime: "1 action", range: "60 feet", components: "V, S, M", duration: "1 hour", description: "Creates an invisible servant incapable of attacking that performs simple tasks at your command. You can give new commands as a bonus action.", effects: [] },

@@ -88,10 +88,10 @@ const PHB_2014_RACES = [
   "Halfling", "Human", "Tiefling",
 ];
 
+// SRD 5.1 ships exactly one background — Acolyte. The other PHB
+// backgrounds were trimmed for the public-release SRD lockdown.
 const PHB_2014_BACKGROUNDS = [
-  "Acolyte", "Charlatan", "Criminal", "Entertainer", "Folk Hero",
-  "Guild Artisan", "Hermit", "Noble", "Outlander", "Sage", "Sailor",
-  "Soldier", "Urchin",
+  "Acolyte",
 ];
 
 export function getRaces() {

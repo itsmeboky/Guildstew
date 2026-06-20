@@ -1,37 +1,45 @@
-// Companion catalog — Pact of the Chain trigger regression.
+// Companion catalog — SRD familiar gating.
 //
-// Earlier, resolveCompanionContext({ className: "Warlock", subclass })
-// inferred Pact of the Chain from subclass.toLowerCase().includes("chain").
-// But `subclass` is the Patron name (Fiend / Archfey / Great Old One)
-// — never "Chain" — so the imp / pseudodragon / quasit / sprite list
-// was never appended. The fix takes the Pact Boon explicitly via a
-// `pactBoon` argument, sourced from characterData.feature_choices
-// in the picker.
+// A Warlock's only SRD familiar source is Pact of the Chain, gained with
+// the Pact Boon at level 3. The picker must therefore NOT appear for a
+// boon-less warlock, a Tome/Blade warlock, or any warlock below level 3 —
+// only Pact of the Chain at level >= 3 surfaces the familiar list (with
+// the imp / pseudodragon / quasit / sprite upgrades). Rangers get no SRD
+// companion at all, so they never resolve a context.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { resolveCompanionContext } from "../companionCatalog.js";
 
-test("Warlock without Pact of the Chain: base familiar list only", () => {
+test("Warlock without a Pact Boon: no familiar picker", () => {
   const ctx = resolveCompanionContext({
     className: "Warlock",
     subclass: "The Fiend",
     pactBoon: null,
+    level: 3,
   });
-  assert.equal(ctx.kind, "familiar");
-  const species = new Set(ctx.list.map((c) => c.species));
-  assert.ok(!species.has("Imp"),
-    "Base list should NOT include the Chain-only Imp");
-  assert.ok(!species.has("Pseudodragon"),
-    "Base list should NOT include the Chain-only Pseudodragon");
+  assert.equal(ctx, null, "No boon → no familiar (only Pact of the Chain grants one)");
 });
 
-test("Warlock + Pact of the Chain: list extends with imp / pseudodragon / quasit / sprite", () => {
+test("Warlock + Pact of the Chain at level 1-2: no familiar picker yet", () => {
+  for (const level of [1, 2]) {
+    const ctx = resolveCompanionContext({
+      className: "Warlock",
+      subclass: "The Fiend",
+      pactBoon: "Pact of the Chain",
+      level,
+    });
+    assert.equal(ctx, null, `Pact Boon is gained at level 3 — none at level ${level}`);
+  }
+});
+
+test("Warlock + Pact of the Chain at level 3+: familiar list with imp / pseudodragon / quasit / sprite", () => {
   const ctx = resolveCompanionContext({
     className: "Warlock",
     subclass: "The Fiend",
     pactBoon: "Pact of the Chain",
+    level: 3,
   });
   assert.equal(ctx.kind, "familiar_chain");
   const species = new Set(ctx.list.map((c) => c.species));
@@ -41,32 +49,34 @@ test("Warlock + Pact of the Chain: list extends with imp / pseudodragon / quasit
   assert.ok(species.has("Sprite"), "Chain list must include Sprite");
 });
 
-test("Warlock + Pact of the Blade / Tome: familiar list NOT upgraded", () => {
+test("Warlock + Pact of the Blade / Tome: no familiar picker", () => {
   for (const pactBoon of ["Pact of the Blade", "Pact of the Tome"]) {
     const ctx = resolveCompanionContext({
       className: "Warlock",
       subclass: "The Fiend",
       pactBoon,
+      level: 10,
     });
-    assert.equal(ctx.kind, "familiar",
-      `${pactBoon} must not trigger the Chain familiar upgrade`);
-    const species = new Set(ctx.list.map((c) => c.species));
-    assert.ok(!species.has("Imp"),
-      `${pactBoon} list should NOT include the Chain-only Imp`);
+    assert.equal(ctx, null, `${pactBoon} does not grant a familiar`);
   }
 });
 
-test("Subclass name containing 'Chain' does NOT trigger Chain upgrade", () => {
-  // Regression for the legacy bug: a hypothetical homebrew patron
-  // whose name contained "chain" would have incorrectly triggered
-  // the Chain familiar list. The Pact Boon is the only signal.
+test("Subclass name containing 'Chain' does NOT trigger a familiar", () => {
+  // The Pact Boon is the only signal — a patron name is never used.
   const ctx = resolveCompanionContext({
     className: "Warlock",
     subclass: "The Chain-Bound Horror",
     pactBoon: "Pact of the Tome",
+    level: 10,
   });
-  assert.equal(ctx.kind, "familiar",
-    "Chain upgrade must be driven by Pact Boon, not patron name");
-  const species = new Set(ctx.list.map((c) => c.species));
-  assert.ok(!species.has("Imp"));
+  assert.equal(ctx, null, "Familiar must be driven by Pact Boon, not patron name");
+});
+
+test("Ranger never resolves a companion context (Beast Master is non-SRD)", () => {
+  for (const subclass of ["Hunter", null]) {
+    for (const level of [1, 3, 11, 20]) {
+      const ctx = resolveCompanionContext({ className: "Ranger", subclass, level });
+      assert.equal(ctx, null, `Ranger (${subclass}, L${level}) must not get a companion picker`);
+    }
+  }
 });

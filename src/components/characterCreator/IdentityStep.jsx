@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Upload, User, Move, ZoomIn, ZoomOut, Save, Pencil } from "lucide-react";
-import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/AuthContext";
+import { uploadFile } from "@/utils/uploadFile";
+import { BUCKETS } from "@/config/storageConfig";
 import { Slider } from "@/components/ui/slider";
 import { RACES, BACKGROUNDS as SRD_BACKGROUNDS } from "@/components/dnd5e/dnd5eRules";
 import { getModdedRaces } from "@/lib/modEngine";
@@ -76,22 +78,19 @@ const RACE_LORE = [
   },
   {
     name: "Elf",
-    subtypes: ["High Elf", "Wood Elf", "Drow"],
+    subtypes: ["High Elf"],
     description: "Graceful and long-lived, elves carry an innate connection to magic and the wild. Keen senses and natural agility define their step.",
     subtypeDescriptions: {
       "High Elf": "Studious and proud — one wizard cantrip; elf weapon training.",
-      "Wood Elf": "Swift and stealthy — base speed 35; Mask of the Wild.",
-      Drow: "Underground dwellers — superior darkvision (120ft); Drow Magic.",
     },
     traits: ["Darkvision", "Fey Ancestry", "Trance", "Keen Senses"],
     icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/f696b9d6e_elfraceicon.png",
   },
   {
     name: "Dwarf",
-    subtypes: ["Mountain Dwarf", "Hill Dwarf"],
+    subtypes: ["Hill Dwarf"],
     description: "Bold and hardy — skilled warriors, miners, and craftspeople with a deep bond to stone and metal.",
     subtypeDescriptions: {
-      "Mountain Dwarf": "Strong warriors — +2 Strength; armor proficiency.",
       "Hill Dwarf": "Especially hardy and perceptive — +1 Wisdom, +1 HP per level.",
     },
     traits: ["Darkvision", "Dwarven Resilience", "Stonecunning"],
@@ -109,44 +108,28 @@ const RACE_LORE = [
   },
   {
     name: "Halfling",
-    subtypes: ["Lightfoot", "Stout"],
+    subtypes: ["Lightfoot"],
     description: "Small and nimble — naturally lucky and brave, with a knack for slipping past trouble.",
     subtypeDescriptions: {
       Lightfoot: "Naturally stealthy — can hide behind creatures one size larger.",
-      Stout: "Hardy — advantage against poison; poison resistance.",
     },
     traits: ["Lucky", "Brave", "Halfling Nimbleness"],
     icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/1f05e3073_halflingraceicon.png",
   },
   {
     name: "Tiefling",
-    subtypes: ["Asmodeus", "Baalzebul", "Dispater", "Fierna", "Glasya", "Levistus", "Mammon", "Mephistopheles", "Zariel"],
+    subtypes: [],
     description: "Descended from fiends, tieflings carry an infernal heritage — striking horns, tails, and a natural pull toward magic.",
-    subtypeDescriptions: {
-      Asmodeus: "Most common — thaumaturgy; hellish rebuke; darkness.",
-      Baalzebul: "Lies and corruption — ray of sickness; crown of madness.",
-      Dispater: "Schemers — disguise self; detect thoughts.",
-      Fierna: "Manipulation — friends; charm person; suggestion.",
-      Glasya: "Tricksters — minor illusion; disguise self; invisibility.",
-      Levistus: "Frozen survivors — ray of frost; armor of Agathys; darkness.",
-      Mammon: "Greed — mage hand; Tenser's floating disk; arcane lock.",
-      Mephistopheles: "Arcane scholars — mage hand; burning hands; flame blade.",
-      Zariel: "Warriors — thaumaturgy; searing smite; branding smite.",
-    },
+    subtypeDescriptions: {},
     traits: ["Darkvision", "Hellish Resistance", "Infernal Legacy"],
     icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/bf4ea2436_TieflingRaceIcon.png",
   },
   {
     name: "Half-Elf",
-    subtypes: ["Standard Half-Elf", "Half-High Elf", "Half-Wood Elf", "Half-Drow"],
+    subtypes: [],
     description: "Walking in two worlds, half-elves combine human adaptability with elven grace — natural diplomats and bridges between cultures.",
-    subtypeDescriptions: {
-      "Standard Half-Elf": "Skill Versatility — proficiency in two skills of choice.",
-      "Half-High Elf": "Elf Weapon Training; one wizard cantrip.",
-      "Half-Wood Elf": "Speed 35; Mask of the Wild.",
-      "Half-Drow": "Superior darkvision (120ft); Drow Magic.",
-    },
-    traits: ["Darkvision", "Fey Ancestry", "Heritage Trait"],
+    subtypeDescriptions: {},
+    traits: ["Darkvision", "Fey Ancestry", "Skill Versatility"],
     icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/297cad9ca_halfelfraceicon.png",
   },
   {
@@ -161,10 +144,9 @@ const RACE_LORE = [
   },
   {
     name: "Gnome",
-    subtypes: ["Forest Gnome", "Rock Gnome"],
+    subtypes: ["Rock Gnome"],
     description: "Small, clever, endlessly curious. Ingenious tinkerers and nature-lovers who find wonder in the world.",
     subtypeDescriptions: {
-      "Forest Gnome": "Speaks to small beasts; knows minor illusion. +1 Dexterity.",
       "Rock Gnome": "Tinker — proficiency with tinker's tools; clockwork toys. +1 Constitution.",
     },
     traits: ["Darkvision", "Gnome Cunning", "Small Size"],
@@ -176,20 +158,11 @@ const RACE_LORE = [
 // existing 2014 SRD BACKGROUNDS registry. Icon emoji, description blurb,
 // and tip come from the prototype; skills / tools / languages mirror the
 // SRD list so we don't fork from canon.
+// SRD 5.1 ships exactly one background — Acolyte. The other 12 PHB
+// backgrounds were trimmed for the public-release SRD lockdown; they're
+// future Brewery content, not migrated here.
 const BACKGROUND_LORE = [
   { name: "Acolyte", icon: "🛐", desc: "You served a temple or holy order. You know rites, faith, and how to find shelter at any shrine.", tip: "Great for clerics, paladins, monks — anyone whose backstory has roots in faith." },
-  { name: "Criminal", icon: "🗝️", desc: "You've lived outside the law. You know fences, secret passages, and how to lie convincingly.", tip: "Rogues love this. Also any character whose past has rough edges." },
-  { name: "Folk Hero", icon: "🌾", desc: "You stood up to a tyrant, saved a village, or pulled off something legendary. Commoners love you.", tip: "Fits fighters, rangers, barbarians from humble origins." },
-  { name: "Noble", icon: "👑", desc: "You were born into wealth and status. You know etiquette, politics, and how to call in favors.", tip: "Charismatic classes — bards, sorcerers, paladins — shine here." },
-  { name: "Sage", icon: "📜", desc: "A lifelong scholar. You know where to find the right book — and how to read what it says.", tip: "Wizards, artificers, anyone who loves lore." },
-  { name: "Soldier", icon: "🛡️", desc: "You served in a fighting force. You know discipline, gear, and the chain of command.", tip: "Fighters, paladins, barbarians — natural fit." },
-  { name: "Outlander", icon: "🏔️", desc: "You grew up in the wilds. Cities feel strange; the wilderness feels like home.", tip: "Rangers, druids, barbarians from far places." },
-  { name: "Sailor", icon: "⚓", desc: "You crewed a ship. You know knots, weather, and how to brawl in a tavern.", tip: "Pairs with anyone — adventurers travel a lot." },
-  { name: "Charlatan", icon: "🎭", desc: "You made your living deceiving people. You read motives like an open book.", tip: "Bards, rogues, sorcerers — anyone with a quick tongue." },
-  { name: "Entertainer", icon: "🎵", desc: "You thrive in front of an audience — laughter, tears, riot, you stir them all.", tip: "Bards, rogues, monks — anyone who shines on stage." },
-  { name: "Guild Artisan", icon: "🔨", desc: "You belong to a craft guild — a respected, established member of the mercantile world.", tip: "Artificers, fighters, wizards — characters with a trade." },
-  { name: "Hermit", icon: "🕯️", desc: "You lived in seclusion. In your solitude, you found a discovery worth sharing.", tip: "Druids, wizards, clerics — contemplative builds." },
-  { name: "Urchin", icon: "🪜", desc: "You grew up on the streets. You know shortcuts, hiding places, and how to make yourself small.", tip: "Rogues, monks, sorcerers — survivors." },
 ];
 
 // Normalize a brewery race (modEngine metadata) into the same shape the
@@ -278,6 +251,7 @@ function fixedLanguagesFor(raceName, subraceName) {
 }
 
 export default function IdentityStep({ characterData, updateCharacterData, campaignId }) {
+  const { user } = useAuth();
   const { data: moddedRaces = [] } = useQuery({
     queryKey: ["characterCreator", "moddedRaces", campaignId],
     queryFn: () => getModdedRaces(campaignId),
@@ -310,12 +284,26 @@ export default function IdentityStep({ characterData, updateCharacterData, campa
   const [fullBodySaved, setFullBodySaved] = useState(!!characterData.avatar_position);
   const [profileSaved, setProfileSaved] = useState(!!characterData.profile_position);
 
+  // Character imagery goes to user-assets/users/{user_id}/character-library/
+  // — the per-user convention shared with the Quick/AI flows. The old
+  // base44.integrations.Core.UploadFile default targeted campaign-assets,
+  // producing URLs that weren't valid for a player's own library.
+  const characterLibraryPath = () =>
+    user?.id ? `users/${user.id}/character-library` : "character-library";
+
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!user?.id) {
+      toast.error("Sign in to upload imagery.");
+      return;
+    }
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await uploadFile(file, BUCKETS.USER, characterLibraryPath(), {
+        userId: user.id,
+        uploadType: "avatar",
+      });
       updateCharacterData({ avatar_url: file_url });
       setFullBodyPosition({ x: 0, y: 0 });
       setFullBodyZoom(1);
@@ -330,9 +318,16 @@ export default function IdentityStep({ characterData, updateCharacterData, campa
   const handleProfileImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!user?.id) {
+      toast.error("Sign in to upload imagery.");
+      return;
+    }
     setUploadingProfile(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await uploadFile(file, BUCKETS.USER, characterLibraryPath(), {
+        userId: user.id,
+        uploadType: "avatar",
+      });
       updateCharacterData({ profile_avatar_url: file_url });
       setProfilePosition({ x: 0, y: 0 });
       setProfileZoom(1);
@@ -385,7 +380,9 @@ export default function IdentityStep({ characterData, updateCharacterData, campa
 
   // ── Race selection ───────────────────────────────────────────
   const buildRaceUpdates = (race) => {
-    const base = { race: race.name, subrace: race.subtypes[0] };
+    // Races with no SRD subrace (Tiefling, Half-Elf, …) have an empty
+    // subtypes list → no subrace. Single-subrace races default to it.
+    const base = { race: race.name, subrace: race.subtypes[0] || "" };
     if (race._source === "brewery") {
       const baseline = applyBreweryRaceBaseline(race._raw || null, characterData);
       const subraceUpdates = applyBreweryRaceSubrace(
@@ -1095,26 +1092,6 @@ function IdentityCodex({
               maxLength={40}
               style={{ fontSize: 16 }}
             />
-          </div>
-          <div>
-            <div className="label" style={{ marginBottom: 6 }}>Starting Level</div>
-            <select
-              className="input"
-              value={String(characterData.level || 1)}
-              onChange={(e) => updateCharacterData({ level: parseInt(e.target.value, 10) || 1 })}
-              style={{
-                appearance: 'none',
-                backgroundImage:
-                  "url(\"data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237B8AA0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 12px center',
-                paddingRight: 36,
-              }}
-            >
-              {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => (
-                <option key={lvl} value={String(lvl)}>Level {lvl}</option>
-              ))}
-            </select>
           </div>
         </div>
       </div>

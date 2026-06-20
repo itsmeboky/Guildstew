@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, Users, Sword, Trophy, ShoppingBag, DollarSign,
   LifeBuoy, Flag, ScrollText, GamepadIcon, Home, Store, Wallet, FileText, Rocket,
-  MessageSquare, HelpCircle, BookOpen, Calendar, Award, Package, Wrench,
+  MessageSquare, HelpCircle, BookOpen, Calendar, Award, Package, Wrench, Palette,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,8 @@ import EventsTab from "@/components/admin/EventsTab";
 import HomepageTab from "@/components/admin/HomepageTab";
 import TitlesTab from "@/components/admin/TitlesTab";
 import GamePackListingsTab from "@/components/admin/GamePackListingsTab";
+import AttributionsTab from "@/components/admin/AttributionsTab";
+import StudioTab from "@/components/admin/StudioTab";
 import { supabase as supabaseClient } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 
@@ -65,6 +67,8 @@ const TABS = [
   { id: "docs",         label: "Documentation",       icon: BookOpen },
   { id: "events",       label: "Community Events",    icon: Calendar },
   { id: "homepage",     label: "Homepage",            icon: Home },
+  { id: "attributions", label: "Artists & Attribution", icon: Palette },
+  { id: "studio",       label: "Studio",              icon: Users },
   { id: "reports",      label: "Reports & Mod",       icon: Flag },
   { id: "log",          label: "Admin Log",           icon: ScrollText },
 ];
@@ -201,6 +205,8 @@ export default function Admin() {
           {tab === "docs"         && <DocsTab />}
           {tab === "events"       && <EventsTab />}
           {tab === "homepage"     && <HomepageTab />}
+          {tab === "attributions" && <AttributionsTab />}
+          {tab === "studio"       && <StudioTab />}
           {tab === "revenue"      && <RevenueTab      dateRange={dateRange} />}
           {tab === "tickets"      && <SupportTicketsTab adminId={user.id} />}
           {tab === "reports"      && <ReportsModerationTab adminId={user.id} />}

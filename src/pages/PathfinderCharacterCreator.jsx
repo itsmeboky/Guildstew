@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
@@ -26,12 +27,41 @@ import { getGamePack } from "@/config/gamePacks";
 
 export default function PathfinderCharacterCreator() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user: authUser } = useAuth();
   const urlParams = new URLSearchParams(window.location.search);
   const campaignId = urlParams.get("campaignId");
   const returnTo = urlParams.get("returnTo");
+  // Edit mode: the library's Edit button routes here as
+  // /PathfinderCharacterCreator?edit=<characterId>. When present we load
+  // that row and hydrate the flow instead of starting blank, and the save
+  // path below branches to Character.update rather than .create.
+  const editCharacterId = urlParams.get("edit");
   const gamePackId = urlParams.get("gamePack") || "pathfinder_2e";
   const pack = getGamePack(gamePackId);
+
+  // Fetch the existing character when editing. Mirrors the 5e creator's
+  // loader (base44.entities.Character.filter by id, take the single row),
+  // staying consistent with how this page saves via base44 below. Gated so
+  // brand-new creates never hit the network. No silent .catch — a failure
+  // is logged with context and surfaced as an error state.
+  const {
+    data: existingCharacter,
+    isLoading: editLoading,
+    isError: editError,
+  } = useQuery({
+    queryKey: ["pf2eEditCharacter", editCharacterId],
+    enabled: !!editCharacterId,
+    queryFn: async () => {
+      try {
+        const rows = await base44.entities.Character.filter({ id: editCharacterId });
+        return rows?.[0] ?? null;
+      } catch (err) {
+        console.error("[PF2e edit] failed to load character", editCharacterId, err);
+        throw err;
+      }
+    },
+  });
 
   if (!pack || pack.family !== "pf2e") {
     return (
@@ -59,29 +89,85 @@ export default function PathfinderCharacterCreator() {
     }
 
     try {
-      const created = await base44.entities.Character.create({
-        game_pack: "pathfinder_2e",
-        name: characterData.name || "Unnamed Character",
-        level: characterData.level || 1,
-        created_by: authUser.email,
-        user_id: authUser.id,
-        system_data: characterData,
-      });
+      // Editing only rewrites the mutable payload (name/level/system_data).
+      // Ownership stamps (created_by, user_id) are set once on create and
+      // left untouched on update so an edit can't reassign the row.
+      const saved = editCharacterId
+        ? await base44.entities.Character.update(editCharacterId, {
+            name: characterData.name || "Unnamed Character",
+            level: characterData.level || 1,
+            system_data: characterData,
+          })
+        : await base44.entities.Character.create({
+            game_pack: "pathfinder_2e",
+            name: characterData.name || "Unnamed Character",
+            level: characterData.level || 1,
+            created_by: authUser.email,
+            user_id: authUser.id,
+            system_data: characterData,
+          });
 
-      toast.success("Character forged", {
-        description: `${created?.name || characterData.name || "Your character"} is in your library.`,
+      // Refresh the library list (CharacterLibrary keys off ['allCharacters'])
+      // and the edit row itself so a reopen reflects the new save.
+      queryClient.invalidateQueries({ queryKey: ["allCharacters"] });
+      if (editCharacterId) {
+        queryClient.invalidateQueries({ queryKey: ["pf2eEditCharacter", editCharacterId] });
+      }
+
+      toast.success(editCharacterId ? "Character updated" : "Character forged", {
+        description: editCharacterId
+          ? `${saved?.name || characterData.name || "Your character"} has been updated.`
+          : `${saved?.name || characterData.name || "Your character"} is in your library.`,
       });
 
       if (returnTo) navigate(returnTo);
       else if (campaignId) navigate(createPageUrl(`CampaignView?id=${campaignId}`));
       else navigate(createPageUrl("CharacterLibrary"));
     } catch (err) {
-      console.error("PF2e Character.create failed:", err);
+      console.error(
+        editCharacterId ? "PF2e Character.update failed:" : "PF2e Character.create failed:",
+        err,
+      );
       toast.error("Save failed", {
         description: err?.message || "Unknown error — check console.",
       });
     }
   };
+
+  // In edit mode we must not mount <Creator> until the row has loaded —
+  // otherwise the user could start typing into the blank default fields and
+  // the hydration effect would clobber their input once the fetch lands.
+  if (editCharacterId && editLoading) {
+    return (
+      <div className="min-h-screen bg-pf-bg flex items-center justify-center">
+        <p className="font-display text-pf-brass tracking-[0.3em] uppercase text-sm">
+          Loading character…
+        </p>
+      </div>
+    );
+  }
+
+  if (editCharacterId && (editError || !existingCharacter)) {
+    return (
+      <div className="min-h-screen bg-pf-bg flex items-center justify-center text-pf-bone">
+        <div className="text-center">
+          <p className="font-display text-pf-brass tracking-[0.3em] uppercase text-sm mb-2">
+            Character Not Found
+          </p>
+          <p className="font-body text-pf-stone text-sm mb-4">
+            We couldn't load that character to edit. It may have been deleted.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(createPageUrl("CharacterLibrary"))}
+            className="font-display text-xs tracking-[0.2em] uppercase text-pf-brass underline"
+          >
+            Back to Library
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Suspense
@@ -93,7 +179,7 @@ export default function PathfinderCharacterCreator() {
         </div>
       }
     >
-      <Creator onComplete={handleComplete} />
+      <Creator onComplete={handleComplete} initialCharacter={existingCharacter ?? null} />
     </Suspense>
   );
 }
