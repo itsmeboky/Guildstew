@@ -177,6 +177,61 @@ export function guessCategory(title) {
   return { guessedCategory: null, confidence: "low" };
 }
 
+// Canonical category names (the import template's Heading-1 text) plus a
+// short, readable alias set per category. Stored already-normalized
+// (lowercased, "&" → "and", whitespace collapsed) for direct comparison.
+const CANONICAL_ALIASES = {
+  regions:   ["regions and maps", "regions", "maps", "geography"],
+  politics:  ["politics and factions", "politics", "factions"],
+  religion:  ["deities and religion", "religion", "deities", "gods"],
+  history:   ["history and timeline", "history", "timeline"],
+  artifacts: ["artifacts and relics", "artifacts", "relics"],
+};
+
+function normalizeCategoryName(text) {
+  return stripTags(text)
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Exact/alias match of a heading against the five canonical category
+ * names. Tolerant of case, "&" vs "and", and surrounding punctuation/
+ * whitespace. Returns a category id or null. Deterministic — no keywords.
+ */
+export function matchCanonicalCategory(headingText) {
+  const norm = normalizeCategoryName(headingText);
+  if (!norm) return null;
+  for (const cat of IMPORT_CATEGORY_IDS) {
+    if (CANONICAL_ALIASES[cat].includes(norm)) return cat;
+  }
+  return null;
+}
+
+/**
+ * Resolve a section's category with the template-aware precedence:
+ *   1. the section's own title canonical-matches → that category, "high"
+ *   2. at h2, its nearest Heading-1 ancestor canonical-matches → inherit,
+ *      "high" (placement under a category heading is authoritative —
+ *      ancestry beats the H2's own keyword guess)
+ *   3. else → the existing keyword guess (unchanged)
+ *
+ * `section.h1Ancestor` is an internal field set by splitSections at h2;
+ * it never appears in the returned contract.
+ */
+export function resolveSectionCategory(section, level) {
+  const own = matchCanonicalCategory(section?.title);
+  if (own) return { guessedCategory: own, confidence: "high" };
+  if (level === "h2" && section?.h1Ancestor) {
+    const ancestor = matchCanonicalCategory(section.h1Ancestor);
+    if (ancestor) return { guessedCategory: ancestor, confidence: "high" };
+  }
+  return guessCategory(section?.title);
+}
+
 /**
  * Split export HTML into sections at the chosen heading level.
  * Each section = { id, title, html } where html is everything between
@@ -203,6 +258,26 @@ export function splitSections(html, level) {
     heads.push({ start: m.index, end: m.index + m[0].length, title: stripTags(m[1]) });
   }
 
+  // For h2 splits, capture each section's nearest preceding Heading-1 so
+  // the resolver can inherit the template's category placement. Internal
+  // only — never emitted in the returned contract.
+  const h1s = [];
+  if (tag === "h2") {
+    const h1Re = /<h1\b[^>]*>([\s\S]*?)<\/h1>/gi;
+    let hm;
+    while ((hm = h1Re.exec(body)) !== null) {
+      h1s.push({ start: hm.index, title: stripTags(hm[1]) });
+    }
+  }
+  const nearestH1 = (pos) => {
+    let title = null;
+    for (const h of h1s) {
+      if (h.start < pos) title = h.title;
+      else break;
+    }
+    return title;
+  };
+
   const sections = [];
 
   // Intro: content before the first heading at this level.
@@ -227,6 +302,8 @@ export function splitSections(html, level) {
       title,
       html: sectionHtml,
       isIntro: false,
+      // Internal only (h2 splits) — resolver input, stripped from contract.
+      h1Ancestor: tag === "h2" ? nearestH1(heads[i].start) : null,
     });
   }
 
