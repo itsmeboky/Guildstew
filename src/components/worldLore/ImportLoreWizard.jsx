@@ -13,12 +13,16 @@ import {
 } from "@/components/ui/select";
 import {
   FileText, Loader2, AlertTriangle, CheckCircle2, XCircle, ArrowLeft,
-  ArrowRight, Download, RefreshCw, Image as ImageIcon,
+  ArrowRight, Download, RefreshCw, Image as ImageIcon, FolderOpen,
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import { base44 } from "@/api/base44Client";
 import { sanitizeLoreHtml } from "@/lib/sanitizeForumHtml";
 import { stripHtml } from "@/utils/worldLoreVisibility";
+import { isPickerConfigured, pickGoogleDoc, exportDocHtml } from "@/utils/googlePicker";
+import {
+  extractDocTitle, splitSections, guessCategory, detectFormatChips,
+} from "@/utils/googleDocImport";
 
 /**
  * World Lore Import — Phase 2B wizard.
@@ -68,6 +72,9 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
   // split level fetches each level at most once per session and keeps
   // the GM's edits when switching back.
   const cacheRef = useRef({});
+  // Active source: { mode: "paste", docLink } or { mode: "picker", docId, html }.
+  // Drives how a split-level switch re-derives sections.
+  const sourceRef = useRef({ mode: null });
 
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -83,6 +90,7 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
     setWarnings([]);
     setSections([]);
     cacheRef.current = {};
+    sourceRef.current = { mode: null };
     setImporting(false);
     setProgress({ current: 0, total: 0 });
     setResults([]);
@@ -118,11 +126,54 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
     });
   }, []);
 
-  // Fetch (or restore from cache) the sections for a given split level.
+  const cacheKeyFor = useCallback((level) => {
+    const src = sourceRef.current;
+    return src.mode === "picker"
+      ? `picker:${src.docId}::${level}`
+      : `paste:${(src.docLink || "").trim()}::${level}`;
+  }, []);
+
+  // Apply a 2A-shaped contract ({docTitle, sections, warnings}) into the
+  // working state and cache it for the active source + level.
+  const applyContract = useCallback((data, level) => {
+    const working = toWorking(data, sections);
+    cacheRef.current[cacheKeyFor(level)] = {
+      docTitle: data.docTitle || "Untitled document",
+      warnings: Array.isArray(data.warnings) ? data.warnings : [],
+      sections: working,
+    };
+    setDocTitle(data.docTitle || "Untitled document");
+    setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
+    setSections(working);
+    setSplitLevel(level);
+    setStep("review");
+  }, [sections, toWorking, cacheKeyFor]);
+
+  // Derive the 2A contract from already-fetched HTML, fully client-side
+  // (picker path — no edge function, no image re-host).
+  const contractFromHtml = useCallback((html, level) => {
+    const secs = splitSections(html, level);
+    return {
+      docTitle: extractDocTitle(html),
+      splitLevel: level,
+      sections: secs.map((s) => {
+        const g = s.isIntro ? { guessedCategory: null, confidence: "low" } : guessCategory(s.title);
+        return {
+          id: s.id, title: s.title, html: s.html, isIntro: !!s.isIntro,
+          guessedCategory: g.guessedCategory, confidence: g.confidence,
+          formatChips: detectFormatChips(s.html),
+        };
+      }),
+      warnings: secs.some((s) => /<img\b/i.test(s.html))
+        ? ["Images were left as Google Drive links (not copied) — they may not load for other members."]
+        : [],
+    };
+  }, []);
+
+  // Load sections for a split level from the active source (cache → fetch).
   const loadLevel = useCallback(async (level, { force = false } = {}) => {
     setError("");
-    const cacheKey = `${docLink.trim()}::${level}`;
-
+    const cacheKey = cacheKeyFor(level);
     if (!force && cacheRef.current[cacheKey]) {
       const cached = cacheRef.current[cacheKey];
       setDocTitle(cached.docTitle);
@@ -133,14 +184,22 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
       return;
     }
 
+    // Picker source re-derives client-side from the fetched HTML.
+    if (sourceRef.current.mode === "picker") {
+      applyContract(contractFromHtml(sourceRef.current.html, level), level);
+      return;
+    }
+
+    // Paste source goes through the edge function.
     setLoading(true);
     try {
       const { data, error: invokeErr } = await supabase.functions.invoke("importGoogleDoc", {
-        body: { docLink: docLink.trim(), campaignId, splitLevel: level },
+        body: { docLink: (sourceRef.current.docLink || "").trim(), campaignId, splitLevel: level },
       });
       if (invokeErr) {
-        // Pull 2A's actionable message out of the non-2xx response body.
-        let msg = "Couldn't import this document. Check the link and try again.";
+        // Try the function's own actionable message; otherwise the call
+        // failed before reaching it (commonly: function not deployed).
+        let msg = "The import service didn't respond. The doc importer may not be deployed yet — try the “Choose from Google Drive” option, or contact the GM.";
         try {
           const ctx = invokeErr.context;
           if (ctx && typeof ctx.json === "function") {
@@ -152,35 +211,47 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
       }
       if (!data) throw new Error("No response from the import service. Try again in a moment.");
       if (data.error) throw new Error(data.error);
-
-      const working = toWorking(data, sections);
-      cacheRef.current[cacheKey] = {
-        docTitle: data.docTitle || "Untitled document",
-        warnings: Array.isArray(data.warnings) ? data.warnings : [],
-        sections: working,
-      };
-      setDocTitle(data.docTitle || "Untitled document");
-      setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
-      setSections(working);
-      setSplitLevel(level);
-      setStep("review");
+      applyContract(data, level);
     } catch (e) {
       setError(e?.message || "Import failed.");
     } finally {
       setLoading(false);
     }
-  }, [docLink, campaignId, sections, toWorking]);
+  }, [campaignId, cacheKeyFor, applyContract, contractFromHtml]);
+
+  // Start a paste-link import.
+  const startPaste = useCallback(() => {
+    sourceRef.current = { mode: "paste", docLink };
+    loadLevel("h1", { force: true });
+  }, [docLink, loadLevel]);
+
+  // Start a Google Drive picker import (client-side fetch + parse).
+  const startPicker = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const picked = await pickGoogleDoc();
+      if (!picked) return; // cancelled
+      const html = await exportDocHtml(picked.id, picked.accessToken);
+      sourceRef.current = { mode: "picker", docId: picked.id, html };
+      applyContract(contractFromHtml(html, "h1"), "h1");
+    } catch (e) {
+      setError(e?.message || "Couldn't open that document from Google Drive.");
+    } finally {
+      setLoading(false);
+    }
+  }, [applyContract, contractFromHtml]);
 
   // Persist the current working edits into the cache for the active
   // level (so switching back restores them), then move to `level`.
   const switchLevel = useCallback((level) => {
     if (level === splitLevel) return;
-    const curKey = `${docLink.trim()}::${splitLevel}`;
+    const curKey = cacheKeyFor(splitLevel);
     if (cacheRef.current[curKey]) {
       cacheRef.current[curKey] = { docTitle, warnings, sections };
     }
     loadLevel(level);
-  }, [splitLevel, docLink, docTitle, warnings, sections, loadLevel]);
+  }, [splitLevel, cacheKeyFor, docTitle, warnings, sections, loadLevel]);
 
   const updateSection = (id, patch) => {
     setSections((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -268,7 +339,9 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
               setDocLink={setDocLink}
               loading={loading}
               error={error}
-              onSubmit={() => loadLevel("h1", { force: true })}
+              onSubmit={startPaste}
+              onPick={startPicker}
+              pickerAvailable={isPickerConfigured()}
             />
           )}
 
@@ -323,7 +396,7 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
           <div className="flex items-center gap-2">
             {step === "source" && (
               <Button
-                onClick={() => loadLevel("h1", { force: true })}
+                onClick={startPaste}
                 disabled={loading || !docLink.trim()}
                 className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
               >
@@ -359,9 +432,31 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
 }
 
 // ── Step: Source ──────────────────────────────────────────────────────
-function SourceStep({ docLink, setDocLink, loading, error, onSubmit }) {
+function SourceStep({ docLink, setDocLink, loading, error, onSubmit, onPick, pickerAvailable }) {
   return (
     <div className="space-y-4 py-1">
+      {pickerAvailable && (
+        <>
+          <div>
+            <Button
+              type="button"
+              onClick={onPick}
+              disabled={loading}
+              variant="outline"
+              className="w-full text-[#37F2D1] border-[#37F2D1]/50 hover:bg-[#37F2D1]/10"
+            >
+              <FolderOpen className="w-4 h-4 mr-2" /> Choose from Google Drive
+            </Button>
+            <p className="text-[11px] text-slate-500 mt-1.5 text-center">
+              Pick any doc you own — including private ones. No sharing changes needed.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-slate-600">
+            <span className="flex-1 h-px bg-slate-700" /> or paste a share link <span className="flex-1 h-px bg-slate-700" />
+          </div>
+        </>
+      )}
+
       <div>
         <Label className="text-sm text-slate-300">Google Doc share link</Label>
         <Input
