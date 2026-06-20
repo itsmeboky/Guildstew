@@ -15,11 +15,18 @@
  * stays hidden and the paste flow is the only option.
  */
 
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
+const CLIENT_ID = cleanEnv(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+const API_KEY = cleanEnv(import.meta.env.VITE_GOOGLE_API_KEY);
 // drive.file = per-file access, granted only for files the user picks.
 // Minimal scope that still allows exporting the chosen doc.
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
+
+// Vercel/.env values sometimes arrive wrapped in quotes or with stray
+// whitespace/newlines. Strip both so a paste slip doesn't get sent to
+// Google verbatim and come back as "invalid_client".
+function cleanEnv(v) {
+  return String(v ?? "").trim().replace(/^['"]+|['"]+$/g, "").trim();
+}
 
 const GIS_SRC = "https://accounts.google.com/gsi/client";
 const GAPI_SRC = "https://apis.google.com/js/api.js";
@@ -58,6 +65,17 @@ function loadPickerApi() {
 
 /** Request an OAuth access token via Google Identity Services. */
 function requestAccessToken() {
+  // Catch the most common misconfig before bouncing to Google's opaque
+  // "invalid_client / OAuth client was not found" page. A real Web client
+  // id is "<projectnumber>-<hash>.apps.googleusercontent.com" — so it must
+  // start with digits + a hyphen, not just end in the right suffix.
+  if (!/^\d+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(CLIENT_ID)) {
+    return Promise.reject(new Error(
+      "Google sign-in is misconfigured: VITE_GOOGLE_CLIENT_ID doesn't look like a real OAuth client ID. "
+      + "It must be the Web client ID from Google Cloud Console → Credentials, of the form "
+      + "'<projectnumber>-<hash>.apps.googleusercontent.com'. Check for quotes/whitespace or a wrong value, then redeploy.",
+    ));
+  }
   return loadScript(GIS_SRC).then(
     () => new Promise((resolve, reject) => {
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
