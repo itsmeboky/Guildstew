@@ -1,5 +1,7 @@
 import React from "react";
 import { safeText } from "@/utils/safeRender";
+import { sanitizeLoreHtml } from "@/lib/sanitizeForumHtml";
+import "./loreRichText.css";
 
 /**
  * World Lore template renderer — Part 2A.
@@ -54,15 +56,18 @@ function FreeformTemplate({ entry }) {
   // markup so existing entries don't lose their formatting, otherwise
   // render through whitespace-safe plain text.
   if (typeof entry.content === "string" && /<[a-z][\s\S]*>/i.test(entry.content)) {
+    // Sanitize legacy + editor HTML before injection (defense in depth —
+    // content is already sanitized on write, but older entries predate
+    // that and render-side keeps us safe regardless of write path).
     return (
       <div
-        className="prose prose-invert max-w-none text-slate-300 leading-relaxed"
-        dangerouslySetInnerHTML={{ __html: entry.content }}
+        className="lore-prose max-w-none"
+        dangerouslySetInnerHTML={{ __html: sanitizeLoreHtml(entry.content) }}
       />
     );
   }
   return (
-    <div className="text-slate-300 whitespace-pre-wrap leading-relaxed">
+    <div className="lore-prose max-w-none whitespace-pre-wrap">
       {safeText(entry.content)}
     </div>
   );
