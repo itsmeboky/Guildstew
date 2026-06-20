@@ -21,7 +21,7 @@ import { sanitizeLoreHtml } from "@/lib/sanitizeForumHtml";
 import { stripHtml } from "@/utils/worldLoreVisibility";
 import { isPickerConfigured, pickGoogleDoc, exportDocHtml } from "@/utils/googlePicker";
 import {
-  extractDocTitle, splitSections, guessCategory, detectFormatChips,
+  extractDocTitle, splitSections, resolveSectionCategory, detectFormatChips,
 } from "@/utils/googleDocImport";
 
 /**
@@ -157,7 +157,7 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
       docTitle: extractDocTitle(html),
       splitLevel: level,
       sections: secs.map((s) => {
-        const g = s.isIntro ? { guessedCategory: null, confidence: "low" } : guessCategory(s.title);
+        const g = s.isIntro ? { guessedCategory: null, confidence: "low" } : resolveSectionCategory(s, level);
         return {
           id: s.id, title: s.title, html: s.html, isIntro: !!s.isIntro,
           guessedCategory: g.guessedCategory, confidence: g.confidence,

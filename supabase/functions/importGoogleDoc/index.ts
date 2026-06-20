@@ -20,7 +20,7 @@ import {
   assertSharedHtmlResponse,
   extractDocTitle,
   splitSections,
-  guessCategory,
+  resolveSectionCategory,
   detectFormatChips,
   rewriteImageSrcs,
 } from "../../../src/utils/googleDocImport.js";
@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
   for (const sec of rawSections) {
     const { html: rehostedHtml, warnings: imgWarnings } = await rewriteImageSrcs(sec.html, uploader);
     if (imgWarnings.length) warnings.push(...imgWarnings);
-    const { guessedCategory, confidence } = guessCategory(sec.title);
+    const { guessedCategory, confidence } = resolveSectionCategory(sec, splitLevel);
     sections.push({
       id: sec.id,
       title: sec.title,
