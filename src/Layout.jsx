@@ -156,7 +156,7 @@ export default function Layout({ children, currentPageName }) {
     enabled: !!user,
     staleTime: 5000,
     refetchInterval: 5000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
     initialData: []
   });
 
