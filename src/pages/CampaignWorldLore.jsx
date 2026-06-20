@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Map as MapIcon, Swords, Church, ScrollText, Gem, MessageSquare, Castle, Crown, Home } from "lucide-react";
+import { ArrowLeft, Map as MapIcon, Swords, Church, ScrollText, Gem, MessageSquare, Castle, Crown, Home, FileUp } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -13,6 +13,7 @@ import RumorBoardView from "@/components/worldLore/RumorBoardView";
 import LegendTrackerView from "@/components/worldLore/LegendTrackerView";
 import GuildHallPanel from "@/components/worldLore/GuildHallPanel";
 import DeitiesPanel from "@/components/worldLore/DeitiesPanel";
+import ImportLoreWizard from "@/components/worldLore/ImportLoreWizard";
 import { stripHtml } from "@/utils/worldLoreVisibility";
 import { ensureCipherMapsForCampaign, hasCompleteCipherMaps } from "@/utils/languageCipherMaps";
 
@@ -84,6 +85,7 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
   const [category, setCategory] = useState(
     CATEGORIES.some((c) => c.key === initialCategory) ? initialCategory : null,
   );
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data: campaign } = useQuery({
     queryKey: ["campaign", campaignId],
@@ -213,7 +215,16 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
       )}
 
       <nav className="px-4 py-2 border-b border-slate-800 bg-[#050816]">
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 items-center">
+          {isGM && (
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="order-last ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border border-[#37F2D1]/40 text-[#37F2D1] hover:bg-[#37F2D1]/10"
+            >
+              <FileUp className="w-3.5 h-3.5" /> Import from Google Doc
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setCategory(null)}
@@ -300,6 +311,16 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
           />
         )}
       </main>
+
+      {isGM && (
+        <ImportLoreWizard
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          campaignId={campaignId}
+          user={user}
+          onGoToCategory={(key) => { setImportOpen(false); setCategory(key); }}
+        />
+      )}
     </div>
   );
 }
