@@ -318,8 +318,12 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
   const failedResults = results.filter((r) => !r.ok);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0f1219] border-slate-700 text-white max-w-3xl max-h-[88vh] overflow-hidden flex flex-col">
+    <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
+      <DialogContent
+        className="bg-[#0f1219] border-slate-700 text-white max-w-3xl max-h-[88vh] overflow-hidden flex flex-col"
+        onInteractOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
             <FileText className="w-5 h-5 text-[#37F2D1]" />

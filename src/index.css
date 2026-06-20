@@ -379,3 +379,16 @@ h1, h2, h3, h4, h5, h6 {
     drop-shadow(0 0 20px var(--crest-color))
     drop-shadow(0 0 30px var(--crest-color));
 }
+
+/* Google Drive Picker — keep it above the Radix dialog overlay (z-50) and
+   clickable. The picker library appends these elements to <body>; with the
+   import wizard's Dialog set to modal={false} there's no pointer-events
+   lock, but we force a high z-index + pointer-events here so the picker is
+   always interactable over the open wizard. */
+.picker-dialog-bg {
+  z-index: 10000 !important;
+}
+.picker-dialog {
+  z-index: 10001 !important;
+  pointer-events: auto !important;
+}
