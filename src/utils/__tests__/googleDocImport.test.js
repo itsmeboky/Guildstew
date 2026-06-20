@@ -19,6 +19,8 @@ import {
   detectFormatChips,
   rewriteImageSrcs,
   IMPORT_CATEGORY_IDS,
+  matchCanonicalCategory,
+  resolveSectionCategory,
 } from "../googleDocImport.js";
 
 // ── doc-id extraction ───────────────────────────────────────────────
@@ -150,6 +152,97 @@ test("guessCategory whole-word matching avoids substring false positives", () =>
 
 test("IMPORT_CATEGORY_IDS is the locked 5-id contract", () => {
   assert.deepEqual(IMPORT_CATEGORY_IDS, ["regions", "politics", "religion", "history", "artifacts"]);
+});
+
+// ── canonical category matching (template H1 names) ─────────────────
+test("matchCanonicalCategory resolves the five template headings", () => {
+  assert.equal(matchCanonicalCategory("Regions & Maps"), "regions");
+  assert.equal(matchCanonicalCategory("Politics & Factions"), "politics");
+  assert.equal(matchCanonicalCategory("Deities & Religion"), "religion");
+  assert.equal(matchCanonicalCategory("History & Timeline"), "history");
+  assert.equal(matchCanonicalCategory("Artifacts & Relics"), "artifacts");
+});
+
+test("matchCanonicalCategory tolerates &-vs-and, case, and whitespace", () => {
+  assert.equal(matchCanonicalCategory("regions and maps"), "regions");
+  assert.equal(matchCanonicalCategory("  DEITIES   AND   RELIGION  "), "religion");
+  assert.equal(matchCanonicalCategory("Politics  &  Factions"), "politics");
+});
+
+test("matchCanonicalCategory accepts the short alias forms", () => {
+  assert.equal(matchCanonicalCategory("Maps"), "regions");
+  assert.equal(matchCanonicalCategory("Factions"), "politics");
+  assert.equal(matchCanonicalCategory("Deities"), "religion");
+  assert.equal(matchCanonicalCategory("Timeline"), "history");
+  assert.equal(matchCanonicalCategory("Relics"), "artifacts");
+});
+
+test("matchCanonicalCategory returns null for non-canonical headings", () => {
+  assert.equal(matchCanonicalCategory("The Temple District"), null);
+  assert.equal(matchCanonicalCategory("House Veyra"), null);
+  assert.equal(matchCanonicalCategory(""), null);
+});
+
+// ── section category resolution (precedence) ────────────────────────
+test("resolveSectionCategory: own canonical title wins at high", () => {
+  assert.deepEqual(
+    resolveSectionCategory({ title: "Artifacts & Relics" }, "h1"),
+    { guessedCategory: "artifacts", confidence: "high" },
+  );
+});
+
+test("resolveSectionCategory: h2 inherits its H1 ancestor at high, beating its own keyword guess", () => {
+  // "The Temple District" alone keyword-guesses religion ("temple"); under
+  // a "Regions & Maps" H1 it must resolve to regions.
+  assert.deepEqual(
+    resolveSectionCategory({ title: "The Temple District", h1Ancestor: "Regions & Maps" }, "h2"),
+    { guessedCategory: "regions", confidence: "high" },
+  );
+  // Items whose titles match no keyword still route by ancestry.
+  assert.deepEqual(
+    resolveSectionCategory({ title: "House Veyra", h1Ancestor: "Politics & Factions" }, "h2"),
+    { guessedCategory: "politics", confidence: "high" },
+  );
+  assert.deepEqual(
+    resolveSectionCategory({ title: "The Ashen Crown", h1Ancestor: "Artifacts & Relics" }, "h2"),
+    { guessedCategory: "artifacts", confidence: "high" },
+  );
+});
+
+test("resolveSectionCategory: ancestry does NOT apply on an h1 split", () => {
+  // Even with an ancestor present, h1 level ignores it and keyword-guesses.
+  assert.deepEqual(
+    resolveSectionCategory({ title: "The Temple District", h1Ancestor: "Regions & Maps" }, "h1"),
+    guessCategory("The Temple District"),
+  );
+});
+
+test("resolveSectionCategory: non-canonical H1 ancestor falls back to keyword guessing", () => {
+  assert.deepEqual(
+    resolveSectionCategory({ title: "The Sunblade Relic", h1Ancestor: "Chapter Two" }, "h2"),
+    { guessedCategory: "artifacts", confidence: "high" }, // keyword "relic"
+  );
+  assert.deepEqual(
+    resolveSectionCategory({ title: "Miscellaneous Notes", h1Ancestor: "Chapter Two" }, "h2"),
+    { guessedCategory: null, confidence: "low" },
+  );
+});
+
+test("splitSections at h2 records the H1 ancestor (internal field)", () => {
+  const doc = `<body>
+    <h1>Regions & Maps</h1>
+    <h2>The Temple District</h2><p>A ward of the city.</p>
+    <h1>Politics & Factions</h1>
+    <h2>House Veyra</h2><p>A noble house.</p>
+  </body>`;
+  const secs = splitSections(doc, "h2");
+  const temple = secs.find((s) => s.title === "The Temple District");
+  const house = secs.find((s) => s.title === "House Veyra");
+  assert.equal(temple.h1Ancestor, "Regions & Maps");
+  assert.equal(house.h1Ancestor, "Politics & Factions");
+  // End-to-end: resolver routes them by ancestry.
+  assert.equal(resolveSectionCategory(temple, "h2").guessedCategory, "regions");
+  assert.equal(resolveSectionCategory(house, "h2").guessedCategory, "politics");
 });
 
 // ── format chips ────────────────────────────────────────────────────
