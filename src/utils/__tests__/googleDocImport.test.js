@@ -19,7 +19,7 @@ import {
   detectFormatChips,
   rewriteImageSrcs,
   IMPORT_CATEGORY_IDS,
-} from "../../../functions/googleDocImport.lib.js";
+} from "../googleDocImport.js";
 
 // ── doc-id extraction ───────────────────────────────────────────────
 test("extractDocId pulls the id from assorted link shapes", () => {
