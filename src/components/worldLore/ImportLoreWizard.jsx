@@ -52,8 +52,9 @@ const LABEL_FOR_ID = Object.fromEntries(CATEGORY_OPTIONS.map((o) => [o.id, o.lab
 const LABEL_FOR_KEY = Object.fromEntries(CATEGORY_OPTIONS.map((o) => [o.key, o.label]));
 const DEFAULT_CATEGORY_ID = "regions";
 
+// "/copy" prompts the GM to save their own copy of the template into Drive.
 const TEMPLATE_URL =
-  "https://docs.google.com/document/d/1importable-world-lore-template/copy"; // TODO(2B): swap for the real template asset when it exists.
+  "https://docs.google.com/document/d/1bBkC-CW_JWgP7WEYhmq_q6CUKIaNLRHOvnCdV_RNSIg/copy";
 
 export default function ImportLoreWizard({ open, onOpenChange, campaignId, user, onGoToCategory }) {
   const queryClient = useQueryClient();
