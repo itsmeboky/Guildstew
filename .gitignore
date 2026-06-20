@@ -29,3 +29,7 @@ dist-ssr
 *.sw?
 
 .env
+/design-reference/
+/audit/
+/audits/
+/src/game-packs/pf2e/pf2e-foundry-source/
