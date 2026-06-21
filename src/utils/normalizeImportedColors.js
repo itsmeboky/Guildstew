@@ -14,10 +14,14 @@
  * all non-color styles are left exactly as-is.
  */
 
-// 0–255 per-channel ceiling for "near-black". Checking every channel is
-// below it (rather than luminance) keeps dark-but-saturated intentional
-// colors — navy #000080, maroon #800000 — from being mistaken for black.
-const NEAR_BLACK_MAX_CHANNEL = 40;
+// "Default dark text" = colors too dark to read on the dark theme that the
+// author didn't deliberately choose: pure/near black (any hue), plus the
+// dark *greys* Google stamps on default text and headings (#434343, #666…).
+// Saturated colors are spared at any darkness (navy #000080, maroon #800000),
+// so only true defaults fall through to the theme.
+const NEAR_BLACK_MAX_CHANNEL = 40;   // pure / near black, any hue
+const DARK_GREY_MAX_CHANNEL = 130;   // unreadable dark grey ceiling
+const GREY_SATURATION_TOLERANCE = 24; // max-min: how close to neutral grey
 
 function parseColorToRgb(value) {
   const v = String(value || "").trim().toLowerCase();
@@ -39,11 +43,19 @@ function parseColorToRgb(value) {
   return null; // hsl / named / unknown → treat as intentional, never strip
 }
 
-/** True for pure black and near-black greys/darks (a "default" color). */
-export function isDefaultBlack(value) {
+/**
+ * True for default dark text: pure/near black (any hue), or a dark, nearly
+ * neutral grey (Google's default heading/body color). Saturated colors are
+ * preserved at any darkness so intentional choices survive.
+ */
+export function isDefaultDarkText(value) {
   const rgb = parseColorToRgb(value);
   if (!rgb) return false;
-  return Math.max(rgb[0], rgb[1], rgb[2]) <= NEAR_BLACK_MAX_CHANNEL;
+  const max = Math.max(rgb[0], rgb[1], rgb[2]);
+  const min = Math.min(rgb[0], rgb[1], rgb[2]);
+  if (max <= NEAR_BLACK_MAX_CHANNEL) return true;
+  if (max <= DARK_GREY_MAX_CHANNEL && (max - min) <= GREY_SATURATION_TOLERANCE) return true;
+  return false;
 }
 
 /**
@@ -66,7 +78,7 @@ export function normalizeImportedColors(html) {
       const prop = trimmed.slice(0, idx).trim().toLowerCase();
       const val = trimmed.slice(idx + 1).trim();
       // Only the exact `color` property — never background-color/border-color.
-      if (prop === "color" && isDefaultBlack(val)) continue;
+      if (prop === "color" && isDefaultDarkText(val)) continue;
       kept.push(`${prop}: ${val}`);
     }
     return kept.length ? ` style="${kept.join("; ")}"` : "";

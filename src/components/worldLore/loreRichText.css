@@ -32,7 +32,7 @@
   margin: 1.25rem 0 0.5rem;
 }
 .lore-prose h1 { font-size: 1.6rem; }
-.lore-prose h2 { font-size: 1.35rem; color: #37f2d1; } /* accent teal — themed heading */
+.lore-prose h2 { font-size: 1.35rem; color: #c77dff; } /* neon purple — themed sub-header */
 .lore-prose h3 { font-size: 1.15rem; }
 
 .lore-prose ul,
