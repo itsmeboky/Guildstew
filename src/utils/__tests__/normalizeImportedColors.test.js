@@ -5,14 +5,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { normalizeImportedColors, isDefaultBlack } from "../normalizeImportedColors.js";
+import { normalizeImportedColors, isDefaultDarkText } from "../normalizeImportedColors.js";
 
-test("isDefaultBlack flags black / near-black, spares real colors", () => {
+test("isDefaultDarkText flags black / near-black, spares real colors", () => {
   for (const black of ["#000000", "#000", "rgb(0,0,0)", "black", "#111111", "#202020", "rgb(16,16,16)"]) {
-    assert.equal(isDefaultBlack(black), true, `${black} should be default-black`);
+    assert.equal(isDefaultDarkText(black), true, `${black} should be default-dark`);
   }
   for (const real of ["#ffffff", "#C0392B", "#F2C037", "#37F2D1", "#000080", "#800000", "rgb(192,57,43)"]) {
-    assert.equal(isDefaultBlack(real), false, `${real} should be preserved`);
+    assert.equal(isDefaultDarkText(real), false, `${real} should be preserved`);
+  }
+});
+
+test("isDefaultDarkText flags Google's dark-grey heading defaults", () => {
+  for (const grey of ["#434343", "#666666", "#595959", "#808080", "rgb(67,67,67)"]) {
+    assert.equal(isDefaultDarkText(grey), true, `${grey} (default heading grey) should be stripped`);
+  }
+  // readable / saturated darks are NOT defaults
+  for (const keep of ["#999999", "#003300", "#330033", "#000080"]) {
+    assert.equal(isDefaultDarkText(keep), false, `${keep} should be preserved`);
   }
 });
 
