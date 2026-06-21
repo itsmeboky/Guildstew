@@ -321,4 +321,13 @@ The attach flow ("Add to Campaign") lives in `src/components/homebrew/MyBrewsLis
 
 `git log origin/claude/brewery-multisystem-audit --oneline` — appended after push:
 
-<!-- GIT_LOG_PLACEHOLDER -->
+```
+$ git log origin/claude/brewery-multisystem-audit --oneline
+867b0d7d docs: Brewery multi-system audit recon report
+c154369f Merge pull request #162 from itsmeboky/claude/world-lore-import-subheader-color
+cd32bbe6 Make imported sub-headers neon purple + strip Google's dark-grey defaults
+3c0badfa Merge World Lore import readable color defaults
+0bc0baf7 Apply readable color defaults on World Lore import
+```
+
+Commit `867b0d7d` (this report) is the HEAD of `origin/claude/brewery-multisystem-audit`, cut from `main` at `c154369f`.
