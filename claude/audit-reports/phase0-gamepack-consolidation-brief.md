@@ -208,5 +208,10 @@ Stop points 1–4 are safe to land independently and already remove the collisio
 
 ```
 $ git log origin/claude/brewery-multisystem-audit --oneline
-<filled after push>
+4fe59595 docs: Phase 0 GamePack consolidation brief (import-graph recon)
+9c870d23 docs: add git log push-proof to Brewery audit report
+867b0d7d docs: Brewery multi-system audit recon report
+c154369f Merge pull request #162 from itsmeboky/claude/world-lore-import-subheader-color
 ```
+
+This brief is commit `4fe59595` on `origin/claude/brewery-multisystem-audit`.
