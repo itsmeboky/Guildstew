@@ -18,6 +18,7 @@ import {
 import { supabase } from "@/api/supabaseClient";
 import { base44 } from "@/api/base44Client";
 import { sanitizeLoreHtml } from "@/lib/sanitizeForumHtml";
+import { normalizeImportedColors } from "@/utils/normalizeImportedColors";
 import { stripHtml } from "@/utils/worldLoreVisibility";
 import { isPickerConfigured, pickGoogleDoc, exportDocHtml } from "@/utils/googlePicker";
 import {
@@ -270,7 +271,9 @@ export default function ImportLoreWizard({ open, onOpenChange, campaignId, user,
       const s = toWrite[i];
       setProgress({ current: i + 1, total: toWrite.length });
       try {
-        const content = sanitizeLoreHtml(s.html);
+        // Import-only: drop default/black text colors so content inherits
+        // the dark theme's readable defaults, then sanitize.
+        const content = sanitizeLoreHtml(normalizeImportedColors(s.html));
         await base44.entities.WorldLoreEntry.create({
           campaign_id: campaignId,
           category: ID_TO_KEY[s.categoryId] || "regions",
