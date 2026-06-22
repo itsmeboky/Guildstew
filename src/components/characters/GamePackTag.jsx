@@ -5,7 +5,7 @@
 // lg for detail headers.
 
 import React from "react";
-import { getGamePack } from "@/config/gamePacks";
+import { getCatalogEntry } from "@/game-packs";
 
 const SIZE_CLASSES = {
   sm: "px-1.5 py-0.5 text-[9px]",
@@ -16,7 +16,7 @@ const SIZE_CLASSES = {
 export default function GamePackTag({ packId, pack: passedPack, size = "md", className = "" }) {
   // Accept either a pre-resolved pack (avoids the extra lookup when
   // the caller already has it) or a raw packId string.
-  const pack = passedPack || getGamePack(packId);
+  const pack = passedPack || getCatalogEntry(packId);
   if (!pack) return null;
 
   const label = pack.tagAbbreviation || pack.shortName || pack.short || pack.name;

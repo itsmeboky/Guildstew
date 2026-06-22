@@ -25,7 +25,7 @@ import {
 } from "@/components/dnd5e/characterCalculations";
 import GamePackPicker from "@/components/characters/GamePackPicker";
 import { useUserGamePacks } from "@/lib/useUserGamePacks";
-import { getGamePack, getUpcomingGamePacks } from "@/config/gamePacks";
+import { getCatalogEntry, listGamePacks } from "@/game-packs";
 
 export default function CreateCharacterDialog({ open, onClose }) {
   const navigate = useNavigate();
@@ -45,7 +45,7 @@ export default function CreateCharacterDialog({ open, onClose }) {
   // no `coming_soon` packs to preview. With dnd5e_2024 staged as
   // coming_soon (Layer 4), this branch keeps the picker visible
   // even for single-pack-owners so they can see what's coming.
-  const upcomingPacks = getUpcomingGamePacks(ownedPacks);
+  const upcomingPacks = listGamePacks({ status: "coming_soon" });
   const shouldAutoPick = ownedPacks.length === 1 && upcomingPacks.length === 0;
   const [chosenPack, setChosenPack] = useState(shouldAutoPick ? ownedPacks[0] : null);
 
@@ -65,7 +65,7 @@ export default function CreateCharacterDialog({ open, onClose }) {
   }, [open, ownedPacks.length, shouldAutoPick]);
 
   const handlePackSelect = (packId) => {
-    const pack = getGamePack(packId);
+    const pack = getCatalogEntry(packId);
     // Admins bypass the public-availability gate so staff can
     // build characters in pre-release packs (VTM today). The
     // creator routes themselves still enforce per-route admin
@@ -101,7 +101,7 @@ export default function CreateCharacterDialog({ open, onClose }) {
     // the URL so per-step UI still dispatches on `?gamePack=` once
     // we're inside the route.
     const packId = chosenPack || "dnd5e_2014";
-    const pack = getGamePack(packId);
+    const pack = getCatalogEntry(packId);
     const route = pack?.creatorRoute || "CharacterCreator";
     const url = createPageUrl(route);
     const sep = url.includes("?") ? "&" : "?";
@@ -191,7 +191,7 @@ export default function CreateCharacterDialog({ open, onClose }) {
  * mode-card descriptions per-pack.
  */
 function DialogPackedContent({ packId, handleFullCreator, handleQuickCreate }) {
-  const pack = getGamePack(packId);
+  const pack = getCatalogEntry(packId);
   const headline = pack ? `Create Your ${pack.short} Character` : "Create Your Character";
   const subhead = pack
     ? `Choose how you'd like to build your ${pack.short} character`

@@ -33,7 +33,7 @@ import {
 import CompanionCard from "@/components/characters/CompanionCard";
 import CharacterDetailDispatcher from "@/components/characters/CharacterDetailDispatcher";
 import GamePackTag from "@/components/characters/GamePackTag";
-import { getGamePack } from "@/config/gamePacks";
+import { getCatalogEntry } from "@/game-packs";
 import { getCharacterPortraitUrl, getCharacterTokenUrl } from "@/lib/characterMedia";
 import SpellHoverCard from "@/components/spells/SpellHoverCard";
 import { classHitDice } from "@/components/dnd5e/characterCalculations";
@@ -434,7 +434,7 @@ export default function CharacterLibrary() {
           renderer — better than silently rendering D&D-shaped stats
           for a Pathfinder character. */}
       {selectedCharacter && (() => {
-        const pack = getGamePack(selectedCharacter.game_pack);
+        const pack = getCatalogEntry(selectedCharacter.game_pack);
         const isDnd = !pack || pack.family === 'dnd5e';
         if (!isDnd) {
           return (
