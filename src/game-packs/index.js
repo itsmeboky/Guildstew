@@ -83,7 +83,9 @@ export const CATALOG = [
     entitlementSlug: "dnd5e_2024",
     readiness: FULLY_READY,
     supportedPintTypes: DND_PINT_TYPES,
-    load: null,
+    // Conforming GamePackBody leaf (chunk 2a); delegates to the legacy
+    // sources, no data moved yet.
+    load: () => import("./dnd/5e/2024"),
   },
   {
     id: "pathfinder_2e",
