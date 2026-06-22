@@ -62,9 +62,9 @@ export const CATALOG = [
     entitlementSlug: "dnd5e_2014",
     readiness: FULLY_READY,
     supportedPintTypes: DND_PINT_TYPES,
-    // Body folds in under src/game-packs/dnd/5e/2014 in Chunk 2; until
-    // then loadGamePack composes the legacy data adapter.
-    load: null,
+    // Conforming GamePackBody leaf (chunk 2a); delegates to the legacy
+    // sources, no data moved yet.
+    load: () => import("./dnd/5e/2014"),
   },
   {
     id: "dnd5e_2024",
@@ -195,19 +195,24 @@ export async function loadGamePack(id) {
   if (!entry) return null;
   if (_bodyCache.has(entry.id)) return _bodyCache.get(entry.id);
 
-  // TEMPORARY — removed in Chunk 3. Until per-pack body modules live under
-  // src/game-packs/<taxonomy>/index.js (Chunk 2 for the D&D editions),
-  // compose the body from the legacy src/data/games data adapter plus,
-  // where a pack already has its own module, that module's exports.
-  const { getGamePackData } = await import("@/data/games/index.js");
-  const content = getGamePackData(entry.id);
+  const mod = entry.load ? await entry.load() : null;
+  const leaf = mod?.default;
 
-  let body = {};
-  if (entry.load) {
-    body = await entry.load();
+  let pack;
+  if (leaf && typeof leaf.resolveForm === "function") {
+    // Conforming GamePackBody leaf (the D&D editions, chunk 2a). The leaf
+    // owns content/vocab/ui/resolveForm and delegates to the real sources
+    // itself — no inline composition needed here.
+    pack = { ...entry, ...leaf };
+  } else {
+    // TEMPORARY — removed in Chunk 3. Packs without a conforming leaf yet
+    // (PF2e) compose the body from the legacy src/data/games adapter plus
+    // the pack module's own exports. Coming-soon packs (no load) fall here
+    // too and resolve to metadata + the adapter fallback.
+    const { getGamePackData } = await import("@/data/games/index.js");
+    pack = { ...entry, content: getGamePackData(entry.id), ...(mod || {}) };
   }
 
-  const pack = { ...entry, content, ...body };
   _bodyCache.set(entry.id, pack);
   return pack;
 }
