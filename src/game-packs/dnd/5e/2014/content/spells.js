@@ -409,7 +409,7 @@ export const spellsByClass = {
 import {
   SUBCLASS_EXPANDED_SPELLS,
   getExpandedSpellsForSubclass,
-} from "./subclassExpandedSpells.js";
+} from "../../../../../components/dnd5e/subclassExpandedSpells.js";
 export { SUBCLASS_EXPANDED_SPELLS, getExpandedSpellsForSubclass };
 
 export const recommendedSpells = {
@@ -719,7 +719,7 @@ import {
   WARLOCK_PACT_SLOTS as _PACT_SLOTS,
   halfCasterSlots as _halfCasterSlots,
   cantripsKnown as _registryCantripsKnown,
-} from '@/components/dnd5e/dnd5eRules';
+} from '../rules/dnd5eRules.js';
 
 // Convert registry's { level: [slots...] } into a 0-indexed array of
 // arrays so the existing [level - 1] indexing still works.
