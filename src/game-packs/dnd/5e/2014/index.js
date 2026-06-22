@@ -8,7 +8,7 @@
 
 import { lazy } from "react";
 import { getGamePackData } from "@/data/games";
-import * as dnd5eRules from "@/components/dnd5e/dnd5eRules";
+import * as dnd5eRules from "./rules/dnd5eRules";
 
 // TEMPORARY delegation — data folds in at 2b/2c.
 const adapter = getGamePackData("dnd5e_2014");
