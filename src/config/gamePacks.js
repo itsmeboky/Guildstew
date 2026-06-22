@@ -100,40 +100,9 @@ export const GAME_PACKS = {
     ),
     meta: () => import("@/game-packs/pathfinder/2e").then((m) => m.PACK_META),
   },
-  world_of_darkness: {
-    id: "world_of_darkness",
-    family: "vtm",
-    name: "Vampire: The Masquerade (V5)",
-    short: "VTM",
-    shortName: "VTM",
-    tagAbbreviation: "VTM V5",
-    tagline: "Modern horror with d10 dice pools.",
-    description:
-      "Vampires, werewolves, mages, and the human cost of supernatural power. Storyteller-focused mechanics.",
-    accent: "#7f1d1d",
-    accentColor: "#c41e3a",
-    icon: "🩸",
-    // Pre-launch: keeps the picker from offering this to non-admin
-    // users (CreateCharacterDialog.handlePackSelect early-returns
-    // on status !== 'available'). The route's admin gate
-    // (pages/VTMCharacterCreator.jsx isAdminUser check) is the
-    // real lock — flipping this to 'available' before the WoD/
-    // Paradox license closes would expose the route to the entire
-    // user base.
-    status: "coming_soon",
-    creatorRoute: "VTMCharacterCreator",
-    // CharacterDetailDispatcher routes saved VTM characters in
-    // the library to this lazy-loaded placeholder sheet. The full
-    // V5 character sheet is a separate downstream project.
-    detailComponent: "VTMCharacterDetail",
-    license: "Dark Pack (pre-launch fan/dev use)",
-    // Lazy creator wired the same way as pf2e so CharacterCreator
-    // dispatch can resolve it once the status flips to 'available'.
-    creator: lazy(() =>
-      import("@/game-packs/vtm").then((m) => ({ default: m.CharacterCreatorFlow }))
-    ),
-    meta: () => import("@/game-packs/vtm").then((m) => m.PACK_META),
-  },
+  // Vampire: The Masquerade (world_of_darkness) removed in Phase 0
+  // chunk 1 — the pack body, route, and creator were deleted pending
+  // the WoD/Paradox license. Future slot reserved as wod/<game>/<edition>.
   mork_borg: {
     id: "mork_borg",
     name: "Mörk Borg",
@@ -177,7 +146,6 @@ export const GAME_PACK_ORDER = [
   "dnd5e_2014",
   "dnd5e_2024",
   "pathfinder_2e",
-  "world_of_darkness",
   "mork_borg",
   "cyborg",
   "kids_on_bikes",

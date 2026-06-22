@@ -20,10 +20,8 @@ const DETAIL_COMPONENTS = {
   PathfinderCharacterDetail: lazy(() =>
     import("@/game-packs/pathfinder/2e").then((m) => ({ default: m.CharacterSheet })),
   ),
-  VTMCharacterDetail: lazy(() =>
-    import("@/game-packs/vtm").then((m) => ({ default: m.CharacterDetail })),
-  ),
   // Dnd5eCharacterDetail: pending extraction from CharacterLibrary
+  // VTMCharacterDetail removed in Phase 0 chunk 1 (VTM pack deleted).
 };
 
 export default function CharacterDetailDispatcher({ character, onEdit, onDelete }) {

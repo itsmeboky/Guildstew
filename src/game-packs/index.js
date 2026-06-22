@@ -108,25 +108,9 @@ export const CATALOG = [
     supportedPintTypes: PF2E_PINT_TYPES,
     load: () => import("@/game-packs/pathfinder/2e"),
   },
-  {
-    id: "world_of_darkness",
-    title: "wod", variant: "vampire", edition: "v5",
-    family: "vtm",
-    name: "Vampire: The Masquerade (V5)",
-    short: "VTM", shortName: "VTM",
-    tagAbbreviation: "VTM V5",
-    tagline: "Modern horror with d10 dice pools.",
-    description:
-      "Vampires, werewolves, mages, and the human cost of supernatural power. Storyteller-focused mechanics.",
-    accent: "#7f1d1d", accentColor: "#c41e3a", icon: "🩸",
-    status: "coming_soon",
-    creatorRoute: "VTMCharacterCreator",
-    detailComponent: "VTMCharacterDetail",
-    license: "Dark Pack (pre-launch fan/dev use)",
-    readiness: NOT_READY,
-    supportedPintTypes: [],
-    load: () => import("@/game-packs/vtm"),
-  },
+  // Reserved future slot: Vampire: The Masquerade lands as wod/<game>/<edition>
+  // (e.g. wod/vampire/v5). Removed in Phase 0 chunk 1 pending the WoD/Paradox
+  // license — pack body, route, and creator deleted; not re-added until ready.
   {
     id: "mork_borg",
     title: "mork_borg", variant: null, edition: null,
