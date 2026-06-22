@@ -18,7 +18,7 @@ import UnknownGamePackError from "./UnknownGamePackError";
 // strings, so we can't compute them from registry data alone.
 const DETAIL_COMPONENTS = {
   PathfinderCharacterDetail: lazy(() =>
-    import("@/game-packs/pf2e").then((m) => ({ default: m.CharacterSheet })),
+    import("@/game-packs/pathfinder/2e").then((m) => ({ default: m.CharacterSheet })),
   ),
   VTMCharacterDetail: lazy(() =>
     import("@/game-packs/vtm").then((m) => ({ default: m.CharacterDetail })),

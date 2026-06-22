@@ -89,7 +89,7 @@ export const CATALOG = [
     id: "pathfinder_2e",
     // Taxonomy path: pathfinder/2e
     title: "pathfinder", variant: "2e", edition: null,
-    family: "pf2e",
+    family: "pathfinder",
     name: "Pathfinder 2e",
     short: "PF2e", shortName: "PF2e",
     tagAbbreviation: "PF2e",
@@ -106,7 +106,7 @@ export const CATALOG = [
     // panels) is not wired for PF2e yet.
     readiness: { characterCreation: "ready", campaignPlay: "not_ready" },
     supportedPintTypes: PF2E_PINT_TYPES,
-    load: () => import("@/game-packs/pf2e"),
+    load: () => import("@/game-packs/pathfinder/2e"),
   },
   {
     id: "world_of_darkness",

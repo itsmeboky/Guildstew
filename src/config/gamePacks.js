@@ -66,7 +66,7 @@ export const GAME_PACKS = {
   },
   pathfinder_2e: {
     id: "pathfinder_2e",
-    family: "pf2e",
+    family: "pathfinder",
     name: "Pathfinder 2e",
     short: "PF2e",
     shortName: "PF2e",
@@ -93,12 +93,12 @@ export const GAME_PACKS = {
     // dispatching on gamePack) stays the path of least disruption
     // for 5e and is not used here.
     creator: lazy(() =>
-      import("@/game-packs/pf2e").then((m) => ({ default: m.CharacterCreatorFlow }))
+      import("@/game-packs/pathfinder/2e").then((m) => ({ default: m.CharacterCreatorFlow }))
     ),
     sheet: lazy(() =>
-      import("@/game-packs/pf2e").then((m) => ({ default: m.CharacterSheet }))
+      import("@/game-packs/pathfinder/2e").then((m) => ({ default: m.CharacterSheet }))
     ),
-    meta: () => import("@/game-packs/pf2e").then((m) => m.PACK_META),
+    meta: () => import("@/game-packs/pathfinder/2e").then((m) => m.PACK_META),
   },
   world_of_darkness: {
     id: "world_of_darkness",

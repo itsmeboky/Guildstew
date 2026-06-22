@@ -11,7 +11,7 @@ import { getCatalogEntry } from "@/game-packs";
 // of the main chunk. Resolved here directly (the catalog carries metadata
 // only, not pack bodies). Path updates with the pf2e -> pathfinder/2e move.
 const Creator = lazy(() =>
-  import("@/game-packs/pf2e").then((m) => ({ default: m.CharacterCreatorFlow })),
+  import("@/game-packs/pathfinder/2e").then((m) => ({ default: m.CharacterCreatorFlow })),
 );
 
 // Mount point for the PF2e character creator. Mirrors the routing
@@ -70,7 +70,7 @@ export default function PathfinderCharacterCreator() {
     },
   });
 
-  if (!pack || pack.family !== "pf2e") {
+  if (!pack || pack.family !== "pathfinder") {
     return (
       <div className="min-h-screen bg-pf-bg flex items-center justify-center text-pf-bone">
         <div className="text-center">
