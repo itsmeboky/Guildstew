@@ -307,15 +307,10 @@ export default function CharacterLibrary() {
               const tokenTransform = (tokenPos || tokenZoom)
                 ? `translate(${tokenPos?.x ?? 0}px, ${tokenPos?.y ?? 0}px) scale(${tokenZoom ?? 1})`
                 : 'none';
-              // VTM's polaroid adjuster authors against object-fit: contain
-              // (whole image visible at 1× zoom, opt-in to crop via slider),
-              // so the library card has to match — otherwise the framing
-              // the player saw in the creator wouldn't survive the trip.
-              // Other packs ship with the legacy object-fit: cover anchored
-              // to 'top' (faces stay in frame on tall portraits).
-              const isVtm = character.game_pack === 'world_of_darkness';
-              const cardObjectFit = isVtm ? 'contain' : 'cover';
-              const cardObjectPos = isVtm ? 'center' : 'top';
+              // Library cards use object-fit: cover anchored to 'top' so
+              // faces stay in frame on tall portraits.
+              const cardObjectFit = 'cover';
+              const cardObjectPos = 'top';
               return (
                 <div
                   key={character.id}
@@ -387,12 +382,9 @@ export default function CharacterLibrary() {
           const portraitTransform = (portraitPos || portraitZoom)
             ? `translate(${portraitPos?.x ?? 0}px, ${portraitPos?.y ?? 0}px) scale(${portraitZoom ?? 1})`
             : 'none';
-          // Same VTM-vs-legacy split as the left sidebar (see the
-          // card render above for the rationale): VTM authors against
-          // contain, dnd5e/pf2e against cover-anchored-top.
-          const isVtm = selectedCharacter.game_pack === 'world_of_darkness';
-          const portraitObjectFit = isVtm ? 'contain' : 'cover';
-          const portraitObjectPos = isVtm ? 'center' : 'top';
+          // cover-anchored-top, matching the left sidebar cards.
+          const portraitObjectFit = 'cover';
+          const portraitObjectPos = 'top';
           return (
             <div
               className="w-full h-full overflow-hidden"

@@ -13,8 +13,8 @@ import { listGamePacks } from "@/game-packs";
  * Admin override: when `isAdmin` is true, packs that would
  * normally render as locked "Coming Soon" previews promote into
  * the clickable section so staff can build characters in
- * pre-release packs (VTM today; whatever ships in pre-release
- * state next) through the regular creator flow. A red
+ * pre-release packs (whatever ships in pre-release state next)
+ * through the regular creator flow. A red
  * "ADMIN PREVIEW" chip on those cards keeps it obvious which
  * pack is publicly visible vs. staff-only.
  *

@@ -67,9 +67,8 @@ export default function CreateCharacterDialog({ open, onClose }) {
   const handlePackSelect = (packId) => {
     const pack = getCatalogEntry(packId);
     // Admins bypass the public-availability gate so staff can
-    // build characters in pre-release packs (VTM today). The
-    // creator routes themselves still enforce per-route admin
-    // gates (e.g. pages/VTMCharacterCreator.jsx), so this only
+    // build characters in pre-release packs. Creator routes can
+    // still enforce their own per-route admin gates, so this only
     // affects which cards the picker accepts a click on — direct
     // URL access is still guarded.
     if (!pack || (pack.status !== "available" && !isAdmin)) {
