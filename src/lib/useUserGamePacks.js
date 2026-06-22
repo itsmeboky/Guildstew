@@ -2,7 +2,7 @@
 // current player currently has access to.
 //
 // Resolution order:
-//   1. Config-driven free packs — anything in GAME_PACKS with
+//   1. Config-driven free packs — anything in the catalog with
 //      `status: "available"` is granted automatically. This is the
 //      source of truth for which systems are free-by-spec
 //      (currently dnd5e_2014, dnd5e_2024, pathfinder_2e), so the
@@ -23,14 +23,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
-import { GAME_PACKS } from "@/config/gamePacks";
+import { CATALOG } from "@/game-packs";
 
-// Free-by-spec packs — config is the source of truth. The DB
+// Free-by-spec packs — the catalog is the source of truth. The DB
 // game_packs.is_free column still exists for the Tavern grid +
 // admin tooling but no longer gates the picker.
-const FREE_PICKER_IDS = Object.entries(GAME_PACKS)
-  .filter(([, pack]) => pack.status === "available")
-  .map(([pickerId]) => pickerId);
+const FREE_PICKER_IDS = CATALOG
+  .filter((pack) => pack.status === "available")
+  .map((pack) => pack.id);
 
 export function useUserGamePacks() {
   const { user } = useAuth();
@@ -50,9 +50,9 @@ export function useUserGamePacks() {
         .filter(Boolean);
       if (purchasedSlugs.length === 0) return [];
       const ids = [];
-      for (const [pickerId, pack] of Object.entries(GAME_PACKS)) {
+      for (const pack of CATALOG) {
         if (pack.entitlementSlug && purchasedSlugs.includes(pack.entitlementSlug)) {
-          ids.push(pickerId);
+          ids.push(pack.id);
         }
       }
       return ids;

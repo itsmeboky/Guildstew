@@ -33,7 +33,11 @@ export * from "./data/index.js";
 // --- Pack metadata -----------------------------------------------------------
 
 export const PACK_META = {
+  // Canonical id is unchanged (persisted character/brew rows reference it);
+  // taxonomy path is pathfinder/2e.
   id: "pathfinder_2e",
+  title: "pathfinder",
+  variant: "2e",
   name: "Pathfinder (2nd Edition)",
   edition: "remaster",
   ready: true,
@@ -54,9 +58,9 @@ export const PACK_META = {
 // uses so the dispatcher doesn't need special-case branches.
 //
 // Re-exporting the data bridge above lets callers do either:
-//   import { ANCESTRIES, CLASSES } from "@/game-packs/pf2e";
+//   import { ANCESTRIES, CLASSES } from "@/game-packs/pathfinder/2e";
 // or pull the whole pack object:
-//   import pack from "@/game-packs/pf2e";
+//   import pack from "@/game-packs/pathfinder/2e";
 //   pack.content.ancestries
 // Re-export the UI surfaces the gamePacks config lazy-imports. Both
 // component files use `export default`, so the re-export has to alias

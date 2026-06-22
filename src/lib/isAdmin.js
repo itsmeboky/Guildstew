@@ -1,8 +1,7 @@
 // Admin allowlist — anyone in ADMIN_EMAILS plus any staff-domain
 // email (@aetherianstudios.com or @guildstew.com) is treated as
 // an admin. Used by Admin.jsx, AdminTools.jsx, and any
-// pre-launch / restricted route (VTM creator while the WoD
-// license is in negotiation).
+// pre-launch / restricted route.
 //
 // Lifted out of pages/Admin.jsx and pages/AdminTools.jsx so the
 // list lives in exactly one place. Add staff explicitly to

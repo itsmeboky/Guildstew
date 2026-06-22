@@ -1,9 +1,6 @@
 import React from "react";
 import { Lock, ChevronRight, ShieldAlert } from "lucide-react";
-import {
-  getOwnedGamePacks,
-  getUpcomingGamePacks,
-} from "@/config/gamePacks";
+import { listGamePacks } from "@/game-packs";
 
 /**
  * Card-grid picker shown when the player owns more than one game
@@ -16,8 +13,8 @@ import {
  * Admin override: when `isAdmin` is true, packs that would
  * normally render as locked "Coming Soon" previews promote into
  * the clickable section so staff can build characters in
- * pre-release packs (VTM today; whatever ships in pre-release
- * state next) through the regular creator flow. A red
+ * pre-release packs (whatever ships in pre-release state next)
+ * through the regular creator flow. A red
  * "ADMIN PREVIEW" chip on those cards keeps it obvious which
  * pack is publicly visible vs. staff-only.
  *
@@ -28,8 +25,11 @@ import {
  *                  packs into the clickable list
  */
 export default function GamePackPicker({ ownedPackIds, onSelect, isAdmin = false }) {
-  const owned = getOwnedGamePacks(ownedPackIds);
-  const upcoming = getUpcomingGamePacks(ownedPackIds);
+  // Available packs are free-by-spec — shown regardless of ownership.
+  // Coming-soon packs are never owned, so the legacy ownership filter
+  // was a no-op; ownedPackIds is retained for API compatibility.
+  const owned = listGamePacks({ status: "available" });
+  const upcoming = listGamePacks({ status: "coming_soon" });
 
   // Admin gets the upcoming packs merged into the clickable
   // section; non-admin sees them as locked previews below.

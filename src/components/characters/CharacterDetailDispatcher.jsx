@@ -11,28 +11,24 @@
 // extracted, callers can route every character through here.
 
 import React, { Suspense, lazy } from "react";
-import { getGamePack, GAME_PACKS } from "@/config/gamePacks";
+import { getCatalogEntry, listGamePacks } from "@/game-packs";
 import UnknownGamePackError from "./UnknownGamePackError";
 
 // Static lazy imports — Vite needs these at build time, not runtime
 // strings, so we can't compute them from registry data alone.
 const DETAIL_COMPONENTS = {
   PathfinderCharacterDetail: lazy(() =>
-    import("@/game-packs/pf2e").then((m) => ({ default: m.CharacterSheet })),
-  ),
-  VTMCharacterDetail: lazy(() =>
-    import("@/game-packs/vtm").then((m) => ({ default: m.CharacterDetail })),
+    import("@/game-packs/pathfinder/2e").then((m) => ({ default: m.CharacterSheet })),
   ),
   // Dnd5eCharacterDetail: pending extraction from CharacterLibrary
+  // VTMCharacterDetail removed in Phase 0 chunk 1 (VTM pack deleted).
 };
 
 export default function CharacterDetailDispatcher({ character, onEdit, onDelete }) {
-  const pack = getGamePack(character?.game_pack);
+  const pack = getCatalogEntry(character?.game_pack);
 
   if (!pack) {
-    const validSlugs = Object.keys(GAME_PACKS).filter(
-      (k) => GAME_PACKS[k]?.status === "available",
-    );
+    const validSlugs = listGamePacks({ status: "available" }).map((p) => p.id);
     return <UnknownGamePackError slug={character?.game_pack} validSlugs={validSlugs} />;
   }
 

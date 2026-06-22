@@ -4,7 +4,7 @@
 // in place — no modal stacking, no losing the user's focus.
 
 import { useState } from 'react';
-import { PF2E_GLOSSARY } from '@/game-packs/pf2e/content/glossary';
+import { PF2E_GLOSSARY } from '@/game-packs/pathfinder/2e/content/glossary';
 
 function RelatedChip({ entry, onClick }) {
   return (

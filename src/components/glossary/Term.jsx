@@ -21,7 +21,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { PF2E_GLOSSARY } from '@/game-packs/pf2e/content/glossary';
+import { PF2E_GLOSSARY } from '@/game-packs/pathfinder/2e/content/glossary';
 import TermPopover from './TermPopover';
 
 export default function Term({ slug, children }) {

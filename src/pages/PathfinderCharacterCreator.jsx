@@ -1,11 +1,18 @@
-import { Suspense } from "react";
+import { Suspense, lazy } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { createPageUrl } from "@/utils";
-import { getGamePack } from "@/config/gamePacks";
+import { getCatalogEntry } from "@/game-packs";
+
+// The PF2e creator flow is a heavy pack body, lazy-loaded so it stays out
+// of the main chunk. Resolved here directly (the catalog carries metadata
+// only, not pack bodies). Path updates with the pf2e -> pathfinder/2e move.
+const Creator = lazy(() =>
+  import("@/game-packs/pathfinder/2e").then((m) => ({ default: m.CharacterCreatorFlow })),
+);
 
 // Mount point for the PF2e character creator. Mirrors the routing
 // pattern CharacterCreator.jsx uses (window.location URL params,
@@ -38,7 +45,7 @@ export default function PathfinderCharacterCreator() {
   // path below branches to Character.update rather than .create.
   const editCharacterId = urlParams.get("edit");
   const gamePackId = urlParams.get("gamePack") || "pathfinder_2e";
-  const pack = getGamePack(gamePackId);
+  const pack = getCatalogEntry(gamePackId);
 
   // Fetch the existing character when editing. Mirrors the 5e creator's
   // loader (base44.entities.Character.filter by id, take the single row),
@@ -63,7 +70,7 @@ export default function PathfinderCharacterCreator() {
     },
   });
 
-  if (!pack || pack.family !== "pf2e") {
+  if (!pack || pack.family !== "pathfinder") {
     return (
       <div className="min-h-screen bg-pf-bg flex items-center justify-center text-pf-bone">
         <div className="text-center">
@@ -77,8 +84,6 @@ export default function PathfinderCharacterCreator() {
       </div>
     );
   }
-
-  const Creator = pack.creator;
 
   const handleComplete = async (characterData) => {
     if (!authUser) {
