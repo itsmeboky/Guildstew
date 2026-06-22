@@ -409,7 +409,7 @@ export const spellsByClass = {
 import {
   SUBCLASS_EXPANDED_SPELLS,
   getExpandedSpellsForSubclass,
-} from "../../../../../components/dnd5e/subclassExpandedSpells.js";
+} from "./subclassExpandedSpells.js";
 export { SUBCLASS_EXPANDED_SPELLS, getExpandedSpellsForSubclass };
 
 export const recommendedSpells = {
