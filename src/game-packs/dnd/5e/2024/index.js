@@ -9,7 +9,7 @@
 import { lazy } from "react";
 import { getGamePackData } from "@/data/games";
 import * as dnd5eRules from "@/components/dnd5e/dnd5eRules";
-import { getBackgroundList, getBackgroundById } from "@/data/games/dnd5e_2024/backgrounds";
+import { getBackgroundList, getBackgroundById } from "./content/backgrounds.js";
 import { getSubclass } from "./content/subclassFeatures.js";
 
 // TEMPORARY delegation — data folds in at 2b/2c. The 2024 adapter already
