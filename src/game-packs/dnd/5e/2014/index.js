@@ -39,7 +39,7 @@ const ui = {
   // D&D character sheet is still inline in CharacterLibrary (no extracted
   // component yet) — extracted/folded later.
   characterSheet: null,
-  statBlock: lazy(() => import("@/game-packs/dnd5e/ui/MonsterStatBlock")),
+  statBlock: lazy(() => import("./shared/ui/MonsterStatBlock.jsx")),
   equipmentLayout: lazy(() => import("./shared/ui/EquipmentLayout.jsx")),
   actionBar: lazy(() => import("@/game-packs/dnd5e/ui/CombatActionBar")),
 };
