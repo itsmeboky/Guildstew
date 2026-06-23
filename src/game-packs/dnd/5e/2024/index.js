@@ -1,14 +1,13 @@
 // D&D 5e (2024) — game-pack body leaf.
 //
-// Phase 0 chunk 2a: a contract-conforming GamePackBody facade. It moves NO
-// data — every field delegates to the sources that exist today
-// (src/data/games/dnd5e_2024, src/components/dnd5e/dnd5eRules, and the shared
-// src/game-packs/dnd5e/ui). 2b/2c fold those sources in behind this stable
-// interface; until then this is TEMPORARY delegation — data folds in at 2b/2c.
+// Phase 0 chunk 2a: a contract-conforming GamePackBody facade. Its data lives
+// in this leaf (content/ + rules/, folded in 2d); equipment/class methods come
+// via the data/games adapter and the UI via the shared src/game-packs/dnd5e/ui.
+// vocab is the leaf's own rules module (chunk 2e — no cross-leaf borrow).
 
 import { lazy } from "react";
 import { getGamePackData } from "@/data/games";
-import * as dnd5eRules from "@/components/dnd5e/dnd5eRules";
+import * as rules from "./rules/rules.js";
 import { getBackgroundList, getBackgroundById } from "./content/backgrounds.js";
 import { getSubclass } from "./content/subclassFeatures.js";
 
@@ -49,7 +48,9 @@ const ui = {
 // GamePackBody (see src/game-packs/index.js loadGamePack).
 const dnd5e2024 = {
   resolveForm: () => null, // wired in the Brewery phase
-  vocab: dnd5eRules,
+  // Self-contained: the leaf's own 2024 rules module. A proper shared-5e
+  // vocab surface is populated in the Brewery phase. (Chunk 2e.)
+  vocab: rules,
   content,
   ui,
 };
