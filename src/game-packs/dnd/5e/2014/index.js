@@ -41,7 +41,7 @@ const ui = {
   characterSheet: null,
   statBlock: lazy(() => import("./shared/ui/MonsterStatBlock.jsx")),
   equipmentLayout: lazy(() => import("./shared/ui/EquipmentLayout.jsx")),
-  actionBar: lazy(() => import("@/game-packs/dnd5e/ui/CombatActionBar")),
+  actionBar: lazy(() => import("./shared/ui/CombatActionBar.jsx")),
 };
 
 // GamePackBody (see src/game-packs/index.js loadGamePack).
