@@ -521,6 +521,7 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                         selectedNPC={selectedNPC}
                         setSelectedNPC={setSelectedNPC}
                         campaignId={campaignId}
+                        gamePack={campaign?.game_pack || "dnd5e_2014"}
                         updateNPCMutation={updateNPCMutation}
                         queryClient={queryClient}
                       />
@@ -694,7 +695,7 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
 // body stays readable. Handles: villain toggle, secret-villain switch,
 // Reveal button (dramatic session notification), plant-clone badge +
 // Sync from Player button, and the NpcVillainPanel editor itself.
-function VillainTabBody({ selectedNPC, setSelectedNPC, campaignId, updateNPCMutation, queryClient }) {
+function VillainTabBody({ selectedNPC, setSelectedNPC, campaignId, gamePack, updateNPCMutation, queryClient }) {
   const isVillain = !!selectedNPC?.is_villain;
   const isSecret = !!selectedNPC?.villain_secret;
   const isPlant = !!selectedNPC?.is_plant;
@@ -856,6 +857,7 @@ function VillainTabBody({ selectedNPC, setSelectedNPC, campaignId, updateNPCMuta
         <NpcVillainPanel
           value={selectedNPC.villain_data || {}}
           baseActionNames={baseActionNames}
+          gamePack={gamePack}
           onChange={(nextData) => {
             setSelectedNPC({ ...selectedNPC, villain_data: nextData });
             updateNPCMutation.mutate({

@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DAMAGE_TYPES } from "@/components/dnd5e/dnd5eRules";
+import { useGamePack } from "@/hooks/useGamePack";
 import { CONDITION_COLORS } from "@/components/combat/conditions";
 
 /**
@@ -91,7 +91,15 @@ const BLANK_AURA = {
   applies_condition: "",
 };
 
-export default function NpcVillainPanel({ value, onChange, baseActionNames = [] }) {
+export default function NpcVillainPanel({ value, onChange, baseActionNames = [], gamePack }) {
+  // Damage-type vocabulary now resolves through the active game pack (P1.2
+  // cutover). `gamePack` is sourced from campaign?.game_pack by the parent;
+  // D&D resolves synchronously (loading never true), so the render needs no
+  // loading state — but the hook's { pack } contract is consumed defensively
+  // (optional-chained) for the non-D&D packs that come later.
+  const { pack } = useGamePack(gamePack);
+  const damageTypes = pack?.vocab?.DAMAGE_TYPES ?? [];
+
   const data = value || {};
   const patch = (fields) => onChange({ ...data, ...fields });
 
@@ -179,6 +187,7 @@ export default function NpcVillainPanel({ value, onChange, baseActionNames = [] 
                 key={idx}
                 action={action}
                 round={idx + 1}
+                damageTypes={damageTypes}
                 onChange={(fields) => updateVillainAction(idx, fields)}
               />
             ))}
@@ -292,6 +301,7 @@ export default function NpcVillainPanel({ value, onChange, baseActionNames = [] 
                 key={idx}
                 phase={phase}
                 baseActionNames={baseActionNames}
+                damageTypes={damageTypes}
                 onChange={(fields) => updatePhase(idx, fields)}
                 onRemove={() => removePhase(idx)}
               />
@@ -320,6 +330,7 @@ export default function NpcVillainPanel({ value, onChange, baseActionNames = [] 
               <AuraCard
                 key={idx}
                 aura={aura}
+                damageTypes={damageTypes}
                 onChange={(fields) => updateAura(idx, fields)}
                 onRemove={() => removeAura(idx)}
               />
@@ -342,7 +353,7 @@ function Field({ label, children }) {
   );
 }
 
-function VillainActionCard({ action, round, onChange }) {
+function VillainActionCard({ action, round, onChange, damageTypes = [] }) {
   const type = action.action_type || "no_roll";
   const isSave = type === "save";
   const isAttack = type === "attack";
@@ -432,7 +443,7 @@ function VillainActionCard({ action, round, onChange }) {
               label="Damage type"
               value={action.damage_type || "fire"}
               onChange={(v) => onChange({ damage_type: v })}
-              options={DAMAGE_TYPES.map((d) => ({ value: d, label: d }))}
+              options={damageTypes.map((d) => ({ value: d, label: d }))}
             />
           </>
         )}
@@ -467,7 +478,7 @@ function VillainActionCard({ action, round, onChange }) {
   );
 }
 
-function PhaseCard({ phase, onChange, onRemove, baseActionNames }) {
+function PhaseCard({ phase, onChange, onRemove, baseActionNames, damageTypes = [] }) {
   const unlocked = Array.isArray(phase.unlocked_actions) ? phase.unlocked_actions : [];
   const disabled = Array.isArray(phase.disabled_actions) ? phase.disabled_actions : [];
 
@@ -587,6 +598,7 @@ function PhaseCard({ phase, onChange, onRemove, baseActionNames }) {
               key={idx}
               action={a}
               tint={phase.phase_color || "#ef4444"}
+              damageTypes={damageTypes}
               onChange={(fields) => updateAction(idx, fields)}
               onRemove={() => removeAction(idx)}
             />
@@ -628,7 +640,7 @@ function PhaseCard({ phase, onChange, onRemove, baseActionNames }) {
 // monster-action fields from Tier 1 (attack / save / no_roll / healing
 // resolution, damage, conditions, AoE, recharge) so GMs can build
 // entirely new actions that only appear when a phase fires.
-function PhaseActionEditor({ action, tint, onChange, onRemove }) {
+function PhaseActionEditor({ action, tint, onChange, onRemove, damageTypes = [] }) {
   const type = action.action_type || "melee_attack";
   const isAttack = type === "melee_attack" || type === "ranged_attack";
   const isSave = type === "saving_throw";
@@ -738,7 +750,7 @@ function PhaseActionEditor({ action, tint, onChange, onRemove }) {
               label="Damage type"
               value={action.damage_type || "slashing"}
               onChange={(v) => onChange({ damage_type: v })}
-              options={DAMAGE_TYPES.map((d) => ({ value: d, label: d }))}
+              options={damageTypes.map((d) => ({ value: d, label: d }))}
             />
           </>
         )}
@@ -793,7 +805,7 @@ function PhaseActionEditor({ action, tint, onChange, onRemove }) {
   );
 }
 
-function AuraCard({ aura, onChange, onRemove }) {
+function AuraCard({ aura, onChange, onRemove, damageTypes = [] }) {
   return (
     <div className="bg-[#0b1220] border border-pink-500/40 rounded-lg p-3 space-y-2">
       <div className="flex items-center gap-2">
@@ -848,7 +860,7 @@ function AuraCard({ aura, onChange, onRemove }) {
           placeholder="None"
           options={[
             { value: "__none", label: "None" },
-            ...DAMAGE_TYPES.map((d) => ({ value: d, label: d })),
+            ...damageTypes.map((d) => ({ value: d, label: d })),
           ]}
         />
         <CompactSelect
